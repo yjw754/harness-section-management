@@ -46,4 +46,5 @@ private:
  std::vector<Entry> entries_;
  std::vector<RelationEntry> relations_;
 };
+HrnSectionTestCase makeFiveLevelMappedCircularCase();
 }

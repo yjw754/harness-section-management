@@ -45,4 +45,20 @@ HrnSectionTestCase HrnSectionCaseBuilder::build() {
  for(const Entry& e:entries_) if(!result.input->append(e.side,*graph_.find(e.label),createCircular(e.options,modeling_tolerance_))) { result.error="section append failed"; result.input.reset(); return result; }
  result.graph=std::move(graph_); result.modeling_tolerance=modeling_tolerance_; result.succeeded=true; return result;
 }
+HrnSectionTestCase makeFiveLevelMappedCircularCase() {
+ Matrix4D matrix; matrix.m[0][0]=0; matrix.m[0][1]=-1; matrix.m[1][0]=1; matrix.m[1][1]=0;
+ matrix.m[0][3]=10; matrix.m[1][3]=20; matrix.m[2][3]=30;
+ HrnCircularSectionCaseOptions root; root.radius=20; root.auto_resize_enabled=true;
+ HrnCircularSectionCaseOptions member; member.radius=2; member.spacing=0.2; member.solve_settings=HrnLayoutSolveSettings(2,100,1e-8);
+ HrnSectionCaseBuilder b;
+ b.positionTransform(matrix).modelingTolerance(1e-6)
+  .segment("P1").segment("P2").segment("P3").segment("P4").segment("P5").segment("P6")
+  .segment("N1").segment("N2").segment("N3")
+  .parent("P2","P1").parent("P3","P2").parent("P4","P3").parent("P5","P4")
+  .sideRootCircular(ZeHrnSide::Positive,root).sideRootCircular(ZeHrnSide::Negative,root);
+ for(const char* label:{"P1","P2","P3","P4","P5","P6"}) b.circularSection(ZeHrnSide::Positive,label,member);
+ for(const char* label:{"N1","N2","N3"}) b.circularSection(ZeHrnSide::Negative,label,member);
+ b.relate("P1","N1",true).relate("P1","N2",false).relate("P2","N2",false).relate("P3","N3",true);
+ return b.build();
+}
 }
