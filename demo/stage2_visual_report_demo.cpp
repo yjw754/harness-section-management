@@ -225,6 +225,52 @@ hrn::HrnSectionTestCase makeManyToOneCase() {
       .relate("mto-positive-child", "mto-negative-mapped", true);
   return builder.build();
 }
+hrn::HrnSectionTestCase makeMixedManyRootCase() {
+  using namespace hrn;
+  Matrix4D matrix;
+  HrnCircularSectionCaseOptions side_root;
+  side_root.radius = 30;
+  HrnCircularSectionCaseOptions large;
+  large.radius = 8;
+  HrnCircularSectionCaseOptions medium;
+  medium.radius = 6;
+  HrnCircularSectionCaseOptions nested;
+  nested.radius = 3;
+  HrnCircularSectionCaseOptions leaf;
+  leaf.radius = 1;
+  HrnSectionCaseBuilder builder;
+  builder.positionTransform(matrix).modelingTolerance(1e-9)
+      .segment("mix-p-one").segment("mix-p-one-child").segment("mix-p-one-leaf")
+      .segment("mix-p-otm")
+      .segment("mix-p-mto-parent").segment("mix-p-mto-child")
+      .segment("mix-n-one")
+      .segment("mix-n-otm-parent").segment("mix-n-otm-child").segment("mix-n-otm-leaf")
+      .segment("mix-n-mto")
+      .parent("mix-p-one-child", "mix-p-one")
+      .parent("mix-p-one-leaf", "mix-p-one-child")
+      .parent("mix-p-mto-child", "mix-p-mto-parent")
+      .parent("mix-n-otm-child", "mix-n-otm-parent")
+      .parent("mix-n-otm-leaf", "mix-n-otm-child")
+      .sideRootCircular(ZeHrnSide::Positive, side_root)
+      .sideRootCircular(ZeHrnSide::Negative, side_root)
+      .circularSection(ZeHrnSide::Positive, "mix-p-one", medium)
+      .circularSection(ZeHrnSide::Positive, "mix-p-one-child", nested)
+      .circularSection(ZeHrnSide::Positive, "mix-p-one-leaf", leaf)
+      .circularSection(ZeHrnSide::Positive, "mix-p-otm", large)
+      .circularSection(ZeHrnSide::Positive, "mix-p-mto-parent", large)
+      .circularSection(ZeHrnSide::Positive, "mix-p-mto-child", nested)
+      .circularSection(ZeHrnSide::Negative, "mix-n-one", medium)
+      .circularSection(ZeHrnSide::Negative, "mix-n-otm-parent", large)
+      .circularSection(ZeHrnSide::Negative, "mix-n-otm-child", nested)
+      .circularSection(ZeHrnSide::Negative, "mix-n-otm-leaf", leaf)
+      .circularSection(ZeHrnSide::Negative, "mix-n-mto", large)
+      .relate("mix-p-one", "mix-n-one", true)
+      .relate("mix-p-otm", "mix-n-otm-parent", true)
+      .relate("mix-p-otm", "mix-n-otm-child", true)
+      .relate("mix-p-mto-parent", "mix-n-mto", true)
+      .relate("mix-p-mto-child", "mix-n-mto", true);
+  return builder.build();
+}
 bool writeCase(const std::string& path, hrn::HrnSectionTestCase candidate, bool expect_conflict) {
   if (!candidate.succeeded) {
     std::cerr << candidate.error << '\n';
@@ -273,7 +319,8 @@ int main(int argc, char** argv) {
       !writeCase(directory + "/stage2-roots-n-0.html", makeRootCountCase(2, 0), false) ||
       !writeCase(directory + "/stage2-roots-1-1-one-to-one.html", makeOneToOneRootCase(), false) ||
       !writeCase(directory + "/stage2-roots-1-n-one-to-many.html", makeOneToManyCase(), false) ||
-      !writeCase(directory + "/stage2-roots-n-1-many-to-one.html", makeManyToOneCase(), false))
+      !writeCase(directory + "/stage2-roots-n-1-many-to-one.html", makeManyToOneCase(), false) ||
+      !writeCase(directory + "/stage2-roots-n-n-mixed.html", makeMixedManyRootCase(), false))
     return 1;
   std::cout << directory + "/stage2-solved.html\n"
             << directory + "/stage1-mapping-conflict.html\n"
@@ -287,6 +334,7 @@ int main(int argc, char** argv) {
             << directory + "/stage2-roots-n-0.html\n"
             << directory + "/stage2-roots-1-1-one-to-one.html\n"
             << directory + "/stage2-roots-1-n-one-to-many.html\n"
-            << directory + "/stage2-roots-n-1-many-to-one.html\n";
+            << directory + "/stage2-roots-n-1-many-to-one.html\n"
+            << directory + "/stage2-roots-n-n-mixed.html\n";
   return 0;
 }
