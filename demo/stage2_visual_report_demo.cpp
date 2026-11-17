@@ -293,6 +293,36 @@ bool writeCase(const std::string& path, hrn::HrnSectionTestCase candidate, bool 
   file << hrn::renderVisualReportHtml(model);
   return static_cast<bool>(file);
 }
+bool writeCaseMatrixIndex(const std::string& path) {
+  std::ofstream file(path.c_str(), std::ios::binary);
+  if (!file) return false;
+  file << R"HTML(<!doctype html><html lang="zh-CN"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Stage 2 同位置案例审查索引</title><style>
+:root{color-scheme:light dark;--bg:#f6f7fb;--card:#fff;--fg:#172033;--muted:#5c667a;--line:#d9deea;--accent:#3159d8}
+@media(prefers-color-scheme:dark){:root{--bg:#10131b;--card:#191e2a;--fg:#e8ebf2;--muted:#aab2c2;--line:#343c4d;--accent:#91a8ff}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.55 system-ui,sans-serif}
+main{max-width:1180px;margin:auto;padding:32px 20px 48px}h1{margin:0 0 8px;font-size:clamp(1.6rem,4vw,2.4rem)}
+.intro{color:var(--muted);max-width:850px}.card{margin-top:24px;background:var(--card);border:1px solid var(--line);border-radius:14px;overflow:auto}
+table{width:100%;border-collapse:collapse;min-width:820px}th,td{padding:12px 14px;text-align:left;border-bottom:1px solid var(--line);vertical-align:top}
+th{background:color-mix(in srgb,var(--accent) 9%,var(--card))}tr:last-child td{border-bottom:0}a{color:var(--accent);font-weight:650;text-decoration:none}a:hover{text-decoration:underline}
+.ok{color:#16834a;font-weight:650}.note{margin-top:18px;padding:14px 16px;border-left:4px solid var(--accent);background:var(--card);border-radius:8px}
+</style></head><body><main><h1>Stage 2：0/1/N × 0/1/N 同位置案例</h1>
+<p class="intro">九个报告覆盖正负两侧顶层 Section 数量的完整组合。所有可建立的跨侧关系均为“同位置”；空侧组合没有关系。点击案例名称进入可交互的求解报告。</p>
+<section class="card" aria-label="案例矩阵"><table><thead><tr><th>正侧 Root</th><th>负侧 Root</th><th>关系类型</th><th>树结构与审查重点</th><th>预期</th><th>报告</th></tr></thead><tbody>
+<tr><td>0</td><td>0</td><td>无</td><td>双侧均无成员 Section</td><td class="ok">排布成功</td><td><a href="stage2-roots-0-0.html">0 × 0</a></td></tr>
+<tr><td>0</td><td>1</td><td>无</td><td>仅负侧一个顶层 Section</td><td class="ok">排布成功</td><td><a href="stage2-roots-0-1.html">0 × 1</a></td></tr>
+<tr><td>1</td><td>0</td><td>无</td><td>仅正侧一个顶层 Section</td><td class="ok">排布成功</td><td><a href="stage2-roots-1-0.html">1 × 0</a></td></tr>
+<tr><td>0</td><td>N</td><td>无</td><td>负侧两个顶层 Section，其中一个含子节点</td><td class="ok">排布成功</td><td><a href="stage2-roots-0-n.html">0 × N</a></td></tr>
+<tr><td>N</td><td>0</td><td>无</td><td>正侧两个顶层 Section，其中一个含子节点</td><td class="ok">排布成功</td><td><a href="stage2-roots-n-0.html">N × 0</a></td></tr>
+<tr><td>1</td><td>1</td><td>一对一</td><td>两侧各一棵树，负侧比正侧深一层</td><td class="ok">排布成功</td><td><a href="stage2-roots-1-1-one-to-one.html">1 × 1</a></td></tr>
+<tr><td>1</td><td>N</td><td>一对多</td><td>负侧父子同心嵌套，另有一个无关顶层 Section</td><td class="ok">排布成功</td><td><a href="stage2-roots-1-n-one-to-many.html">1 × N</a></td></tr>
+<tr><td>N</td><td>1</td><td>多对一</td><td>正侧父子同心嵌套，另有一个无关顶层 Section</td><td class="ok">排布成功</td><td><a href="stage2-roots-n-1-many-to-one.html">N × 1</a></td></tr>
+<tr><td>N</td><td>N</td><td>混合</td><td>两侧各三棵不等深树；一对一、一对多、多对一分组独立</td><td class="ok">排布成功</td><td><a href="stage2-roots-n-n-mixed.html">N × N</a></td></tr>
+</tbody></table></section><p class="note">一对多或多对一中，同侧共享圆心的 Section 均为半径递减的祖先—后代关系；它们相互包含，不以兄弟节点方式重叠。</p>
+</main></body></html>)HTML";
+  return static_cast<bool>(file);
+}
 }  // namespace
 int main(int argc, char** argv) {
   if (argc != 2) {
@@ -320,7 +350,8 @@ int main(int argc, char** argv) {
       !writeCase(directory + "/stage2-roots-1-1-one-to-one.html", makeOneToOneRootCase(), false) ||
       !writeCase(directory + "/stage2-roots-1-n-one-to-many.html", makeOneToManyCase(), false) ||
       !writeCase(directory + "/stage2-roots-n-1-many-to-one.html", makeManyToOneCase(), false) ||
-      !writeCase(directory + "/stage2-roots-n-n-mixed.html", makeMixedManyRootCase(), false))
+      !writeCase(directory + "/stage2-roots-n-n-mixed.html", makeMixedManyRootCase(), false) ||
+      !writeCaseMatrixIndex(directory + "/stage2-case-matrix-index.html"))
     return 1;
   std::cout << directory + "/stage2-solved.html\n"
             << directory + "/stage1-mapping-conflict.html\n"
@@ -335,6 +366,7 @@ int main(int argc, char** argv) {
             << directory + "/stage2-roots-1-1-one-to-one.html\n"
             << directory + "/stage2-roots-1-n-one-to-many.html\n"
             << directory + "/stage2-roots-n-1-many-to-one.html\n"
-            << directory + "/stage2-roots-n-n-mixed.html\n";
+            << directory + "/stage2-roots-n-n-mixed.html\n"
+            << directory + "/stage2-case-matrix-index.html\n";
   return 0;
 }

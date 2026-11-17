@@ -11,6 +11,20 @@ build-visual/stage2_visual_report_demo build-visual/reports
 
 Open `build-visual/reports/stage2-solved.html` and
 `build-visual/reports/stage1-mapping-conflict.html` directly in a browser.
+Open `build-visual/reports/stage2-case-matrix-index.html` to review the complete
+`0/1/N × 0/1/N` matrix, where the count is the number of top-level member
+Sections directly inside each side Root Section. The index links nine standalone
+reports covering `0 × 0`, `0 × 1`, `1 × 0`, `0 × N`, `N × 0`, `1 × 1`,
+`1 × N`, `N × 1`, and `N × N`.
+
+The new bilateral cases use same-position relations only. They cover one-to-one,
+one-to-many, many-to-one, and an `N × N` mixture of all three. In repeated-endpoint
+groups, Sections forced to one center on the same side form a decreasing-radius
+ancestor-descendant chain, so the circles are contained rather than overlapping
+siblings. Empty-side combinations contain no relation because a relation requires
+one endpoint on each side. Positive and negative trees deliberately use different
+depths and parent groupings.
+
 `build-visual/reports/stage2-nested-pairs.html` shows the unit-test case with
 `p0` containing `p1` and `p2`, `n0` containing `n1` and `n2`, and two
 same-position relations (`p1`–`n1`, `p2`–`n2`).

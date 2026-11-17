@@ -17,9 +17,10 @@ set(roots_1_1 "${OUTPUT_DIR}/stage2-roots-1-1-one-to-one.html")
 set(roots_1_n "${OUTPUT_DIR}/stage2-roots-1-n-one-to-many.html")
 set(roots_n_1 "${OUTPUT_DIR}/stage2-roots-n-1-many-to-one.html")
 set(roots_n_n "${OUTPUT_DIR}/stage2-roots-n-n-mixed.html")
+set(matrix_index "${OUTPUT_DIR}/stage2-case-matrix-index.html")
 foreach(file IN ITEMS "${success}" "${failure}" "${nested}" "${single_pair}" "${two_parents}"
     "${roots_0_0}" "${roots_0_1}" "${roots_1_0}" "${roots_0_n}" "${roots_n_0}"
-    "${roots_1_1}" "${roots_1_n}" "${roots_n_1}" "${roots_n_n}")
+    "${roots_1_1}" "${roots_1_n}" "${roots_n_1}" "${roots_n_n}" "${matrix_index}")
   if(NOT EXISTS "${file}")
     message(FATAL_ERROR "missing report: ${file}")
   endif()
@@ -38,6 +39,7 @@ file(READ "${roots_1_1}" roots_1_1_html)
 file(READ "${roots_1_n}" roots_1_n_html)
 file(READ "${roots_n_1}" roots_n_1_html)
 file(READ "${roots_n_n}" roots_n_n_html)
+file(READ "${matrix_index}" matrix_index_html)
 foreach(empty_side_html IN ITEMS "${roots_0_0_html}" "${roots_0_1_html}" "${roots_1_0_html}"
     "${roots_0_n_html}" "${roots_n_0_html}")
   string(FIND "${empty_side_html}" "排布成功" index)
@@ -154,6 +156,16 @@ string(FIND "${roots_n_n_html}" "普通对应" index)
 if(NOT index EQUAL -1)
   message(FATAL_ERROR "N x N mixed report contains an ordinary relation")
 endif()
+foreach(expected IN ITEMS "0/1/N × 0/1/N" "一对一" "一对多" "多对一" "混合"
+    "stage2-roots-0-0.html" "stage2-roots-0-1.html" "stage2-roots-1-0.html"
+    "stage2-roots-0-n.html" "stage2-roots-n-0.html"
+    "stage2-roots-1-1-one-to-one.html" "stage2-roots-1-n-one-to-many.html"
+    "stage2-roots-n-1-many-to-one.html" "stage2-roots-n-n-mixed.html")
+  string(FIND "${matrix_index_html}" "${expected}" index)
+  if(index EQUAL -1)
+    message(FATAL_ERROR "case matrix index missing: ${expected}")
+  endif()
+endforeach()
 foreach(text IN ITEMS "排布成功" "正侧层级" "负侧层级" "同位置" "普通对应"
     "class=\"section-circle\"" "class=\"side-root\""
     "data-node=\"p4\"" "data-node=\"n2\"" "})();</script>")

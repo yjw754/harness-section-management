@@ -101,6 +101,16 @@ class VisualReportBrowserTest(unittest.TestCase):
         self.assertEqual(circle.evaluate("node => getComputedStyle(node).outlineStyle"), "none")
         self.page.screenshot(path=str(REPORTS / "browser-mobile-dark.png"), full_page=True)
 
+    def test_case_matrix_index_opens_mixed_report(self):
+        self.open_report("stage2-case-matrix-index.html")
+        self.page.locator('a[href="stage2-roots-n-n-mixed.html"]').click()
+        self.assertTrue(self.page.url.endswith("/stage2-roots-n-n-mixed.html"))
+        self.page.locator(".map-row").nth(1).click()
+        self.assertEqual(self.active_nodes(), ["p3", "n1"])
+        detail = self.page.locator("#section-detail").inner_text()
+        self.assertIn("mix-p-otm", detail)
+        self.assertIn("mix-n-otm-parent", detail)
+
 
 if __name__ == "__main__":
     unittest.main()
