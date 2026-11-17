@@ -2,6 +2,7 @@
 
 #include <cmath>
 #include <functional>
+#include <limits>
 #include <map>
 
 #include "hrn/section/HrnPositionPoint.h"
@@ -9,6 +10,9 @@
 #include "hrn/section/HrnSectionGeometryService.h"
 
 namespace hrn {
+bool enforceCoupledCircular(const HrnPositionPointInput& input,
+                            const std::vector<HrnSegmentSideRelation>& relations,
+                            HrnCircularHierarchyResult& result);
 namespace {
 const double kModelingTolerance = 1e-9;
 const double kPi = 3.14159265358979323846;
@@ -33,7 +37,9 @@ bool solveSide(const HrnPositionPointInput& input, ZeHrnSide side,
   HrnCircularSolvedSide& solved = output.sides[side == ZeHrnSide::Positive ? 0 : 1];
   const size_t count = input.sectionCount(side);
   solved.root = input.sideRootSection(side).clone();
-  if (!solved.root || !HrnPositionPoint::validateSectionData(*solved.root)) {
+  if (!solved.root || !HrnPositionPoint::validateSectionData(*solved.root) ||
+      solved.root->layout().solveSettings().algorithm_version !=
+          HrnCircularRuleBasedLayoutSolver::kAlgorithmVersion) {
     fail(output, HrnSectionTarget::sideRoot(side), HrnSectionFailureStage::InputValidation,
          HrnSectionFailureReason::InvalidInput, 0, 0);
     return false;
@@ -50,6 +56,8 @@ bool solveSide(const HrnPositionPointInput& input, ZeHrnSide side,
     solved.sections.push_back(input.sectionAt(side, i).clone());
     if (!solved.sections.back() ||
         !HrnPositionPoint::validateSectionData(*solved.sections.back()) ||
+        solved.sections.back()->layout().solveSettings().algorithm_version !=
+            HrnCircularRuleBasedLayoutSolver::kAlgorithmVersion ||
         !index.insert(std::make_pair(&segment, i)).second) {
       fail(output, targetFor(side, solved, i), HrnSectionFailureStage::InputValidation,
            HrnSectionFailureReason::InvalidInput, 0, 0);
@@ -81,6 +89,21 @@ bool solveSide(const HrnPositionPointInput& input, ZeHrnSide side,
     if (!placed.succeeded) {
       fail(output, target, HrnSectionFailureStage::LayoutSolve, placed.reason,
            request.settings.algorithm_version, placed.iterations_used);
+      if (placed.reason == HrnSectionFailureReason::IterationBudgetExceeded &&
+          request.settings.max_iterations < std::numeric_limits<size_t>::max()) {
+        HrnSectionAdjustment adjustment;
+        adjustment.kind = HrnSectionAdjustmentKind::IncreaseIterationBudget;
+        adjustment.target = target;
+        adjustment.parameter = HrnSectionParameterKey::MaxIterations;
+        adjustment.has_current_value = true;
+        adjustment.current_value = HrnSectionAdjustmentValue::count(
+            request.settings.max_iterations);
+        adjustment.has_suggested_value = true;
+        adjustment.suggested_value = HrnSectionAdjustmentValue::count(
+            request.settings.max_iterations + 1);
+        adjustment.certainty = HrnSectionAdjustmentCertainty::DeterministicCandidate;
+        output.status.diagnostics.back().adjustments.push_back(adjustment);
+      }
       return false;
     }
     std::vector<HrnCircle2D> disks;
@@ -116,6 +139,30 @@ bool solveSide(const HrnPositionPointInput& input, ZeHrnSide side,
       conflict.measured_value = current_radius;
       conflict.has_required_value = true;
       conflict.required_value = required_radius;
+      const HrnCircularLayoutPlacement* worst = nullptr;
+      double worst_extent = -1;
+      for (const auto& placement : placed.placements) {
+        const double x = placement.center.x - enclosure.circle.center.x;
+        const double y = placement.center.y - enclosure.circle.center.y;
+        const double extent = std::hypot(x, y) + placement.radius + request.spacing;
+        if (extent > worst_extent) {
+          worst_extent = extent;
+          worst = &placement;
+        }
+      }
+      if (worst) {
+        const double x = worst->center.x - enclosure.circle.center.x;
+        const double y = worst->center.y - enclosure.circle.center.y;
+        const double length = std::hypot(x, y);
+        const double ux = length == 0 ? 1 : x / length;
+        const double uy = length == 0 ? 0 : y / length;
+        conflict.has_rhs = true;
+        conflict.rhs = targetFor(side, solved, worst->id);
+        conflict.has_lhs_witness = true;
+        conflict.lhs_witness = {ux * current_radius, uy * current_radius};
+        conflict.has_rhs_witness = true;
+        conflict.rhs_witness = {x + ux * worst->radius, y + uy * worst->radius};
+      }
       diagnostic.conflicts.push_back(conflict);
       HrnSectionAdjustment adjustment;
       adjustment.kind = HrnSectionAdjustmentKind::IncreaseParentDimension;
@@ -174,7 +221,6 @@ HrnCircularHierarchyResult HrnPositionPointSolver::solveCircular(
     const HrnPositionPointInput& input,
     const std::vector<HrnSegmentSideRelation>& relations) const {
   HrnCircularHierarchyResult result;
-  (void)relations; // Explicit coupling is added by the Stage 2 transaction solver.
   if (!isRigidTransform(input.positionTransform(), kModelingTolerance)) {
     fail(result, HrnSectionTarget::positionPoint(), HrnSectionFailureStage::InputValidation,
          HrnSectionFailureReason::InvalidInput, 0, 0);
@@ -182,6 +228,7 @@ HrnCircularHierarchyResult HrnPositionPointSolver::solveCircular(
   }
   if (!solveSide(input, ZeHrnSide::Positive, result) ||
       !solveSide(input, ZeHrnSide::Negative, result)) return result;
+  if (!enforceCoupledCircular(input, relations, result)) return result;
   result.status.committed = true;
   return result;
 }

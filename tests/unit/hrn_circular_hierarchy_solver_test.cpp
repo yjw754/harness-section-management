@@ -96,6 +96,25 @@ TEST(HrnCircularHierarchySolver, AutoRadiusAndFixedBoundary) {
   EXPECT_EQ(failed.status.primary_reason, HrnSectionFailureReason::FixedBoundaryInsufficient);
   ASSERT_FALSE(failed.status.diagnostics.empty());
   EXPECT_EQ(failed.status.diagnostics.front().target.segment, &parent);
+  ASSERT_FALSE(failed.status.diagnostics.front().conflicts.empty());
+  EXPECT_TRUE(failed.status.diagnostics.front().conflicts.front().has_lhs_witness);
+  EXPECT_TRUE(failed.status.diagnostics.front().conflicts.front().has_rhs_witness);
+}
+
+TEST(HrnCircularHierarchySolver, RejectsUnknownVersionEvenOnLeaf) {
+  Matrix4D matrix;
+  auto candidate = input(matrix);
+  HrnSegment leaf;
+  HrnSectionOptions options;
+  std::unique_ptr<HrnRuleBasedLayout> layout(new HrnRuleBasedLayout());
+  ASSERT_TRUE(layout->setSolveSettings(HrnLayoutSolveSettings(99, 1000, 1e-9)));
+  auto data = HrnSectionData::create(HrnCircularSectionShape::create(1, 1e-9),
+                                     std::move(layout), options);
+  ASSERT_TRUE(candidate->append(ZeHrnSide::Positive, leaf, std::move(data)));
+  HrnPositionPointSolver solver;
+  auto result = solver.solveCircular(*candidate, {});
+  EXPECT_FALSE(result.status.committed);
+  EXPECT_EQ(result.status.primary_reason, HrnSectionFailureReason::InvalidInput);
 }
 
 TEST(HrnCircularHierarchySolver, MultipleRootsOnBothSidesAndAllCircularSizeModes) {

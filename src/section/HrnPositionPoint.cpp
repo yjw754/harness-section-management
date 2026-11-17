@@ -47,6 +47,7 @@ std::unique_ptr<HrnPositionPoint> HrnPositionPoint::clone() const {
     for (const auto& section : sides_[k].sections)
       result->sides_[k].sections.push_back(section->clone());
   }
+  result->relations_ = relations_;
   return result;
 }
 size_t HrnPositionPoint::sectionCount(ZeHrnSide s) const {
