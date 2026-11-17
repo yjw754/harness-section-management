@@ -171,6 +171,60 @@ hrn::HrnSectionTestCase makeOneToOneRootCase() {
       .relate("positive-nested-child", "negative-nested-child", true);
   return builder.build();
 }
+hrn::HrnSectionTestCase makeOneToManyCase() {
+  using namespace hrn;
+  Matrix4D matrix;
+  HrnCircularSectionCaseOptions side_root;
+  side_root.radius = 20;
+  HrnCircularSectionCaseOptions mapped;
+  mapped.radius = 8;
+  HrnCircularSectionCaseOptions nested;
+  nested.radius = 3;
+  HrnCircularSectionCaseOptions unrelated;
+  unrelated.radius = 4;
+  HrnSectionCaseBuilder builder;
+  builder.positionTransform(matrix).modelingTolerance(1e-9)
+      .segment("otm-positive-mapped")
+      .segment("otm-negative-parent").segment("otm-negative-child")
+      .segment("otm-negative-extra-root")
+      .parent("otm-negative-child", "otm-negative-parent")
+      .sideRootCircular(ZeHrnSide::Positive, side_root)
+      .sideRootCircular(ZeHrnSide::Negative, side_root)
+      .circularSection(ZeHrnSide::Positive, "otm-positive-mapped", mapped)
+      .circularSection(ZeHrnSide::Negative, "otm-negative-parent", mapped)
+      .circularSection(ZeHrnSide::Negative, "otm-negative-child", nested)
+      .circularSection(ZeHrnSide::Negative, "otm-negative-extra-root", unrelated)
+      .relate("otm-positive-mapped", "otm-negative-parent", true)
+      .relate("otm-positive-mapped", "otm-negative-child", true);
+  return builder.build();
+}
+hrn::HrnSectionTestCase makeManyToOneCase() {
+  using namespace hrn;
+  Matrix4D matrix;
+  HrnCircularSectionCaseOptions side_root;
+  side_root.radius = 20;
+  HrnCircularSectionCaseOptions mapped;
+  mapped.radius = 8;
+  HrnCircularSectionCaseOptions nested;
+  nested.radius = 3;
+  HrnCircularSectionCaseOptions unrelated;
+  unrelated.radius = 4;
+  HrnSectionCaseBuilder builder;
+  builder.positionTransform(matrix).modelingTolerance(1e-9)
+      .segment("mto-positive-parent").segment("mto-positive-child")
+      .segment("mto-positive-extra-root")
+      .segment("mto-negative-mapped")
+      .parent("mto-positive-child", "mto-positive-parent")
+      .sideRootCircular(ZeHrnSide::Positive, side_root)
+      .sideRootCircular(ZeHrnSide::Negative, side_root)
+      .circularSection(ZeHrnSide::Positive, "mto-positive-parent", mapped)
+      .circularSection(ZeHrnSide::Positive, "mto-positive-child", nested)
+      .circularSection(ZeHrnSide::Positive, "mto-positive-extra-root", unrelated)
+      .circularSection(ZeHrnSide::Negative, "mto-negative-mapped", mapped)
+      .relate("mto-positive-parent", "mto-negative-mapped", true)
+      .relate("mto-positive-child", "mto-negative-mapped", true);
+  return builder.build();
+}
 bool writeCase(const std::string& path, hrn::HrnSectionTestCase candidate, bool expect_conflict) {
   if (!candidate.succeeded) {
     std::cerr << candidate.error << '\n';
@@ -217,7 +271,9 @@ int main(int argc, char** argv) {
       !writeCase(directory + "/stage2-roots-1-0.html", makeRootCountCase(1, 0), false) ||
       !writeCase(directory + "/stage2-roots-0-n.html", makeRootCountCase(0, 2), false) ||
       !writeCase(directory + "/stage2-roots-n-0.html", makeRootCountCase(2, 0), false) ||
-      !writeCase(directory + "/stage2-roots-1-1-one-to-one.html", makeOneToOneRootCase(), false))
+      !writeCase(directory + "/stage2-roots-1-1-one-to-one.html", makeOneToOneRootCase(), false) ||
+      !writeCase(directory + "/stage2-roots-1-n-one-to-many.html", makeOneToManyCase(), false) ||
+      !writeCase(directory + "/stage2-roots-n-1-many-to-one.html", makeManyToOneCase(), false))
     return 1;
   std::cout << directory + "/stage2-solved.html\n"
             << directory + "/stage1-mapping-conflict.html\n"
@@ -229,6 +285,8 @@ int main(int argc, char** argv) {
             << directory + "/stage2-roots-1-0.html\n"
             << directory + "/stage2-roots-0-n.html\n"
             << directory + "/stage2-roots-n-0.html\n"
-            << directory + "/stage2-roots-1-1-one-to-one.html\n";
+            << directory + "/stage2-roots-1-1-one-to-one.html\n"
+            << directory + "/stage2-roots-1-n-one-to-many.html\n"
+            << directory + "/stage2-roots-n-1-many-to-one.html\n";
   return 0;
 }
