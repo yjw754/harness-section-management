@@ -62,9 +62,11 @@ python3 tests/browser/stage2_visual_report_browser_test.py build-visual/reports
 ```
 
 Verification on 2026-11-17: `HRN_MAX_STAGE=2` with warnings as errors passed
-41 CTest cases, including the demo artifact gate. The Stage 1 gate separately
-passed 8 tests. An AddressSanitizer build passed 40 Stage 1/2 and report tests.
-Chromium headless passed four browser checks covering circle focus, tree and
-mapping selection, keyboard selection, independent zoom, fit, failure rendering,
-and a narrow dark viewport. The browser test saves `browser-circle-selected.png`
-and `browser-mobile-dark.png` in the report output directory.
+43 CTest cases, including the expanded demo artifact gate. The generator produced
+all nine matrix reports and `stage2-case-matrix-index.html`. Chromium headless
+passed five browser checks covering circle focus, tree and mapping selection,
+keyboard selection, independent zoom, fit, failure rendering, a narrow dark
+viewport, and index-to-mixed-case navigation. The Stage 1 gate separately passed
+8 tests, and the earlier AddressSanitizer build passed 40 Stage 1/2 and report
+tests. The browser test saves `browser-circle-selected.png` and
+`browser-mobile-dark.png` in the report output directory.
