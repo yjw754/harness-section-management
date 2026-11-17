@@ -2,6 +2,7 @@
 
 #include <cmath>
 #include <cstdlib>
+#include <vector>
 
 #include "hrn/section/HrnPositionPoint.h"
 #include "hrn/section/HrnPositionPointSolver.h"
@@ -190,6 +191,74 @@ TEST(HrnCircularTransaction, OneNestedSiblingPairSharesCenterAcrossSides) {
                            side->centers2d[i].y - side->centers2d[0].y) + 1, 6 + 1e-9);
     EXPECT_GE(std::hypot(side->centers2d[1].x - side->centers2d[2].x,
                          side->centers2d[1].y - side->centers2d[2].y), 2 - 1e-9);
+  }
+}
+
+TEST(HrnCircularTransaction, ThreeMappedPairsAcrossTwoNestedParents) {
+  HrnSegment p0, p1, p2, p3, p4, n0, n1, n2, n3, n4;
+  ASSERT_TRUE(p0.attachTo(p3));
+  ASSERT_TRUE(p1.attachTo(p0));
+  ASSERT_TRUE(p2.attachTo(p0));
+  ASSERT_TRUE(p4.attachTo(p3));
+  ASSERT_TRUE(n0.attachTo(n3));
+  ASSERT_TRUE(n1.attachTo(n3));
+  ASSERT_TRUE(n2.attachTo(n0));
+  ASSERT_TRUE(n4.attachTo(n0));
+  auto candidate = input(20);
+  for (const auto side : {ZeHrnSide::Positive, ZeHrnSide::Negative}) {
+    HrnSegment& outer = side == ZeHrnSide::Positive ? p3 : n3;
+    HrnSegment& middle = side == ZeHrnSide::Positive ? p0 : n0;
+    HrnSegment& first = side == ZeHrnSide::Positive ? p1 : n1;
+    HrnSegment& second = side == ZeHrnSide::Positive ? p2 : n2;
+    HrnSegment& outer_child = side == ZeHrnSide::Positive ? p4 : n4;
+    if (side == ZeHrnSide::Negative) {
+      HrnSectionOptions rotated;
+      rotated.rotation = 180;
+      ASSERT_TRUE(candidate->append(side, outer, HrnSectionData::create(
+          HrnCircularSectionShape::create(12, 1e-9),
+          std::unique_ptr<HrnSectionLayout>(new HrnRuleBasedLayout()), rotated)));
+    } else {
+      ASSERT_TRUE(candidate->append(side, outer, section(12)));
+    }
+    if (side == ZeHrnSide::Negative) {
+      HrnSectionOptions rotated;
+      rotated.rotation = 180;
+      ASSERT_TRUE(candidate->append(side, middle, HrnSectionData::create(
+          HrnCircularSectionShape::create(2, 1e-9),
+          std::unique_ptr<HrnSectionLayout>(new HrnRuleBasedLayout()), rotated)));
+    } else {
+      ASSERT_TRUE(candidate->append(side, middle, section(2)));
+    }
+    ASSERT_TRUE(candidate->append(side, first, section(1)));
+    ASSERT_TRUE(candidate->append(side, second, section(1)));
+    ASSERT_TRUE(candidate->append(side, outer_child, section(1)));
+  }
+  HrnPositionPointSolver solver;
+  auto solved = solver.solveCircular(*candidate,
+      {{&p1, &n1, true}, {&p2, &n2, true}, {&p4, &n4, true}});
+  ASSERT_TRUE(solved.status.committed);
+  const auto& positive = solved.side(ZeHrnSide::Positive);
+  const auto& negative = solved.side(ZeHrnSide::Negative);
+  ASSERT_EQ(positive.centers2d.size(), 5u);
+  ASSERT_EQ(negative.centers2d.size(), 5u);
+  for (size_t i : {2u, 3u, 4u}) {
+    EXPECT_NEAR(positive.centers2d[i].x, negative.centers2d[i].x, 1e-9);
+    EXPECT_NEAR(positive.centers2d[i].y, negative.centers2d[i].y, 1e-9);
+  }
+  for (const auto* side : {&positive, &negative}) {
+    const std::vector<size_t> inner_children =
+        side == &positive ? std::vector<size_t>{2, 3} : std::vector<size_t>{3, 4};
+    const size_t outer_child = side == &positive ? 4 : 2;
+    for (size_t i : inner_children)
+      EXPECT_LE(std::hypot(side->centers2d[i].x - side->centers2d[1].x,
+                           side->centers2d[i].y - side->centers2d[1].y) + 1, 2 + 1e-9);
+    EXPECT_LE(std::hypot(side->centers2d[1].x - side->centers2d[0].x,
+                         side->centers2d[1].y - side->centers2d[0].y) + 2, 12 + 1e-9);
+    EXPECT_LE(std::hypot(side->centers2d[outer_child].x - side->centers2d[0].x,
+                         side->centers2d[outer_child].y - side->centers2d[0].y) + 1,
+              12 + 1e-9);
+    EXPECT_GE(std::hypot(side->centers2d[1].x - side->centers2d[outer_child].x,
+                         side->centers2d[1].y - side->centers2d[outer_child].y), 3 - 1e-9);
   }
 }
 

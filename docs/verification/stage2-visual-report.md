@@ -16,6 +16,10 @@ Open `build-visual/reports/stage2-solved.html` and
 same-position relations (`p1`–`n1`, `p2`–`n2`).
 `build-visual/reports/stage2-single-mapped-pair.html` uses the same nesting
 with only the `p1`–`n1` same-position relation.
+`build-visual/reports/stage2-two-parent-pairs.html` shows `p3` containing
+`p0` and `p4`, `p0` containing `p1` and `p2`; on the negative side `n3`
+contains `n1` and `n0`, while `n0` contains `n2` and `n4`. The three leaf
+pairs have same-position relations.
 The reports contain inline CSS, SVG, and JavaScript and require no server or network.
 Click a tree node, mapping row, or circle to inspect a section and highlight its
 mapped peer. Clicking one mapping row highlights only that relation and shows
