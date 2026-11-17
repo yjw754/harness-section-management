@@ -99,6 +99,78 @@ hrn::HrnSectionTestCase makeTwoParentPairsCase() {
   builder.relate("p1", "n1", true).relate("p2", "n2", true).relate("p4", "n4", true);
   return builder.build();
 }
+hrn::HrnSectionTestCase makeRootCountCase(int positive_roots, int negative_roots) {
+  using namespace hrn;
+  Matrix4D matrix;
+  HrnCircularSectionCaseOptions side_root;
+  side_root.radius = 20;
+  HrnCircularSectionCaseOptions outer;
+  outer.radius = 8;
+  HrnCircularSectionCaseOptions nested;
+  nested.radius = 3;
+  HrnCircularSectionCaseOptions other;
+  other.radius = 4;
+  HrnSectionCaseBuilder builder;
+  builder.positionTransform(matrix).modelingTolerance(1e-9)
+      .sideRootCircular(ZeHrnSide::Positive, side_root)
+      .sideRootCircular(ZeHrnSide::Negative, side_root);
+  if (positive_roots == 1) {
+    builder.segment("zero-positive-root")
+        .circularSection(ZeHrnSide::Positive, "zero-positive-root", outer);
+  } else if (positive_roots > 1) {
+    builder.segment("positive-root-a").segment("positive-root-a-child")
+        .segment("positive-root-b")
+        .parent("positive-root-a-child", "positive-root-a")
+        .circularSection(ZeHrnSide::Positive, "positive-root-a", outer)
+        .circularSection(ZeHrnSide::Positive, "positive-root-a-child", nested)
+        .circularSection(ZeHrnSide::Positive, "positive-root-b", other);
+  }
+  if (negative_roots == 1) {
+    builder.segment("zero-negative-root")
+        .circularSection(ZeHrnSide::Negative, "zero-negative-root", outer);
+  } else if (negative_roots > 1) {
+    builder.segment("negative-root-a").segment("negative-root-a-child")
+        .segment("negative-root-b")
+        .parent("negative-root-a-child", "negative-root-a")
+        .circularSection(ZeHrnSide::Negative, "negative-root-a", outer)
+        .circularSection(ZeHrnSide::Negative, "negative-root-a-child", nested)
+        .circularSection(ZeHrnSide::Negative, "negative-root-b", other);
+  }
+  return builder.build();
+}
+hrn::HrnSectionTestCase makeOneToOneRootCase() {
+  using namespace hrn;
+  Matrix4D matrix;
+  HrnCircularSectionCaseOptions side_root;
+  side_root.radius = 20;
+  HrnCircularSectionCaseOptions positive_outer;
+  positive_outer.radius = 8;
+  HrnCircularSectionCaseOptions positive_child;
+  positive_child.radius = 3;
+  HrnCircularSectionCaseOptions negative_outer;
+  negative_outer.radius = 9;
+  HrnCircularSectionCaseOptions negative_child;
+  negative_child.radius = 4;
+  HrnCircularSectionCaseOptions negative_leaf;
+  negative_leaf.radius = 1;
+  HrnSectionCaseBuilder builder;
+  builder.positionTransform(matrix).modelingTolerance(1e-9)
+      .segment("one-positive-root").segment("positive-nested-child")
+      .segment("one-negative-root").segment("negative-nested-child")
+      .segment("negative-deep-leaf")
+      .parent("positive-nested-child", "one-positive-root")
+      .parent("negative-nested-child", "one-negative-root")
+      .parent("negative-deep-leaf", "negative-nested-child")
+      .sideRootCircular(ZeHrnSide::Positive, side_root)
+      .sideRootCircular(ZeHrnSide::Negative, side_root)
+      .circularSection(ZeHrnSide::Positive, "one-positive-root", positive_outer)
+      .circularSection(ZeHrnSide::Positive, "positive-nested-child", positive_child)
+      .circularSection(ZeHrnSide::Negative, "one-negative-root", negative_outer)
+      .circularSection(ZeHrnSide::Negative, "negative-nested-child", negative_child)
+      .circularSection(ZeHrnSide::Negative, "negative-deep-leaf", negative_leaf)
+      .relate("positive-nested-child", "negative-nested-child", true);
+  return builder.build();
+}
 bool writeCase(const std::string& path, hrn::HrnSectionTestCase candidate, bool expect_conflict) {
   if (!candidate.succeeded) {
     std::cerr << candidate.error << '\n';
@@ -139,11 +211,24 @@ int main(int argc, char** argv) {
       !writeCase(directory + "/stage1-mapping-conflict.html", makeCase(true), true) ||
       !writeCase(directory + "/stage2-nested-pairs.html", makeNestedPairsCase(true), false) ||
       !writeCase(directory + "/stage2-single-mapped-pair.html", makeNestedPairsCase(false), false) ||
-      !writeCase(directory + "/stage2-two-parent-pairs.html", makeTwoParentPairsCase(), false)) return 1;
+      !writeCase(directory + "/stage2-two-parent-pairs.html", makeTwoParentPairsCase(), false) ||
+      !writeCase(directory + "/stage2-roots-0-0.html", makeRootCountCase(0, 0), false) ||
+      !writeCase(directory + "/stage2-roots-0-1.html", makeRootCountCase(0, 1), false) ||
+      !writeCase(directory + "/stage2-roots-1-0.html", makeRootCountCase(1, 0), false) ||
+      !writeCase(directory + "/stage2-roots-0-n.html", makeRootCountCase(0, 2), false) ||
+      !writeCase(directory + "/stage2-roots-n-0.html", makeRootCountCase(2, 0), false) ||
+      !writeCase(directory + "/stage2-roots-1-1-one-to-one.html", makeOneToOneRootCase(), false))
+    return 1;
   std::cout << directory + "/stage2-solved.html\n"
             << directory + "/stage1-mapping-conflict.html\n"
             << directory + "/stage2-nested-pairs.html\n"
             << directory + "/stage2-single-mapped-pair.html\n"
-            << directory + "/stage2-two-parent-pairs.html\n";
+            << directory + "/stage2-two-parent-pairs.html\n"
+            << directory + "/stage2-roots-0-0.html\n"
+            << directory + "/stage2-roots-0-1.html\n"
+            << directory + "/stage2-roots-1-0.html\n"
+            << directory + "/stage2-roots-0-n.html\n"
+            << directory + "/stage2-roots-n-0.html\n"
+            << directory + "/stage2-roots-1-1-one-to-one.html\n";
   return 0;
 }
