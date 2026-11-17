@@ -5,6 +5,7 @@ Gate date: 2026-11-16; review fixes verified 2026-11-17 (Asia/Shanghai).
 - Compiler: GNU C++ 13.3.0 at `/usr/bin/c++`; generated compile flags include `-std=c++14 -Wall -Wextra -Wpedantic`.
 - Test framework: GoogleTest 1.16.0 (pinned SHA256 FetchContent archive), with individual cases registered through CTest.
 - Compatibility check: CMake 3.16.8 configure/build and its CTest runner pass all 6 cases after the GoogleTest migration.
+- clangd: `cmake -S . -B build-stage1 -DHRN_BUILD_TESTS=ON -DHRN_MAX_STAGE=1` exports `build-stage1/compile_commands.json`; `.clangd` points to it. After configuration, clangd checked all 18 source and test translation units with 0 errors.
 - Configure/build: `cmake -S . -B build-stage1 -DHRN_BUILD_TESTS=ON -DHRN_MAX_STAGE=1 && cmake --build build-stage1 --parallel` — PASS.
 - Tests: `ctest --test-dir build-stage1 --output-on-failure` — 6/6 PASS, 0 failed.
 - Demo: `cmake -S . -B build-demo -DHRN_BUILD_DEMO=ON -DHRN_BUILD_TESTS=OFF && cmake --build build-demo --target stage1_case_builder_demo --parallel && ctest --test-dir build-demo -R stage1_case_builder_demo --output-on-failure` — 1/1 PASS.
