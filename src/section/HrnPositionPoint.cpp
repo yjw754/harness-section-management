@@ -28,6 +28,15 @@ std::unique_ptr<HrnPositionPoint> HrnPositionPoint::createEmpty(const Matrix4D& 
     n.release();
     return std::unique_ptr<HrnPositionPoint>();
   }
+  if (p && n) {
+    const bool shared_shape = &p->shape() == &n->shape();
+    const bool shared_layout = &p->layout() == &n->layout();
+    if (shared_shape || shared_layout) {
+      if (shared_shape) n->shape_.release();
+      if (shared_layout) n->layout_.release();
+      return std::unique_ptr<HrnPositionPoint>();
+    }
+  }
   if (!isRigidTransform(m, 1e-9) || !p || !n || !validateSectionData(*p) ||
       !validateSectionData(*n))
     return std::unique_ptr<HrnPositionPoint>();

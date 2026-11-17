@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 
 #include <cmath>
+#include <cstdlib>
 
 #include "hrn/section/HrnPositionPoint.h"
 #include "hrn/section/HrnPositionPointSolver.h"
@@ -211,4 +212,48 @@ TEST(HrnCircularTransaction, CandidateSpaceFailureIsNotHardConflict) {
       {{&child_a, &negative_root, true}}, solver, status);
   EXPECT_FALSE(point);
   EXPECT_EQ(status.primary_reason, HrnSectionFailureReason::NoSolutionFound);
+}
+
+TEST(HrnCircularTransaction, UnrelatedLeafBudgetDoesNotLimitCoupledGroup) {
+  HrnSegment parent, sibling, child_a, child_b, negative_root, unrelated_leaf;
+  ASSERT_TRUE(child_a.attachTo(parent));
+  ASSERT_TRUE(child_b.attachTo(parent));
+  ASSERT_TRUE(unrelated_leaf.attachTo(negative_root));
+  auto candidate = input(5);
+  ASSERT_TRUE(candidate->append(ZeHrnSide::Positive, parent, section(1, true)));
+  ASSERT_TRUE(candidate->append(ZeHrnSide::Positive, sibling, section(1)));
+  ASSERT_TRUE(candidate->append(ZeHrnSide::Positive, child_a, section(1)));
+  ASSERT_TRUE(candidate->append(ZeHrnSide::Positive, child_b, section(1)));
+  ASSERT_TRUE(candidate->append(ZeHrnSide::Negative, negative_root, section(1)));
+  HrnSectionOptions options;
+  std::unique_ptr<HrnRuleBasedLayout> limited(new HrnRuleBasedLayout());
+  ASSERT_TRUE(limited->setSolveSettings(HrnLayoutSolveSettings(1, 1, 1e-9)));
+  auto leaf = HrnSectionData::create(HrnCircularSectionShape::create(0.5, 1e-9),
+                                      std::move(limited), options);
+  ASSERT_TRUE(candidate->append(ZeHrnSide::Negative, unrelated_leaf, std::move(leaf)));
+  HrnPositionPointSolver solver;
+  HrnSectionTransactionResult status;
+  auto point = HrnPositionPoint::createSolved(*candidate,
+      {{&child_a, &negative_root, true}}, solver, status);
+  EXPECT_TRUE(point);
+  EXPECT_TRUE(status.committed);
+}
+
+TEST(HrnCircularTransaction, RejectsAliasedSectionPassedToEdit) {
+  EXPECT_EXIT({
+    HrnSegment segment;
+    auto candidate = input();
+    if (!candidate->append(ZeHrnSide::Positive, segment, section(1))) std::_Exit(3);
+    HrnPositionPointSolver solver;
+    HrnSectionTransactionResult status;
+    auto point = HrnPositionPoint::createSolved(*candidate, {}, solver, status);
+    if (!point) std::_Exit(4);
+    HrnSectionData* borrowed = const_cast<HrnSectionData*>(
+        &point->sectionAt(ZeHrnSide::Positive, 0));
+    const auto edit = point->replaceSectionData(ZeHrnSide::Positive, segment,
+        std::unique_ptr<HrnSectionData>(borrowed), solver);
+    if (!edit.committed && edit.primary_reason == HrnSectionFailureReason::InvalidInput &&
+        &point->sectionAt(ZeHrnSide::Positive, 0) == borrowed) std::_Exit(0);
+    std::_Exit(5);
+  }, ::testing::ExitedWithCode(0), "");
 }

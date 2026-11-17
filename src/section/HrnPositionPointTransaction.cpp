@@ -72,6 +72,31 @@ class HrnPositionPointTransaction {
  public:
   static HrnSectionTransactionResult run(HrnPositionPoint& point, Edit edit,
                                          const HrnPositionPointSolver& solver) {
+    if (edit.section) {
+      bool shared_shape = false, shared_layout = false;
+      for (const HrnPositionPoint::SideData& side : point.sides_) {
+        const auto inspect = [&](const HrnSectionData* owned) -> bool {
+          if (edit.section.get() == owned) return true;
+          shared_shape = shared_shape || &edit.section->shape() == &owned->shape();
+          shared_layout = shared_layout || &edit.section->layout() == &owned->layout();
+          return false;
+        };
+        if (inspect(side.root.get())) {
+          edit.section.release();
+          return invalid(HrnSectionTarget::positionPoint());
+        }
+        for (const auto& owned : side.sections)
+          if (inspect(owned.get())) {
+            edit.section.release();
+            return invalid(HrnSectionTarget::positionPoint());
+          }
+      }
+      if (shared_shape || shared_layout) {
+        if (shared_shape) edit.section->shape_.release();
+        if (shared_layout) edit.section->layout_.release();
+        return invalid(HrnSectionTarget::positionPoint());
+      }
+    }
     if (edit.kind != EditKind::Transform && !validSide(edit.side))
       return invalid(HrnSectionTarget::positionPoint());
     if (edit.kind == EditKind::Move &&

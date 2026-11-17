@@ -29,7 +29,7 @@ rg -n 'HrnIntelligentLayout|HrnEllipticalSectionShape|HrnRectangularSectionShape
 git diff --check
 ```
 
-Results: Stage 1 regression **7/7 PASS**; Stage 1+2 gate **33/33 PASS**; AddressSanitizer **33/33 PASS** with no reported errors. The scope search returned no matches; `git diff --check` reported no whitespace errors.
+Results after the ownership and coupled-budget review fixes: Stage 1 regression **8/8 PASS**; Stage 1+2 gate **36/36 PASS**; AddressSanitizer **36/36 PASS** with no reported errors. The scope search returned no matches; `git diff --check` reported no whitespace errors.
 
 Acceptance covers 100 positive-side circular Sections in five Segment levels and 50 negative-side Sections with a different tree, deterministic repeat solves, independent parent containment and sibling clearance checks, and a single Section edit transaction. A second five-level mapped case checks structured failure for incompatible explicit same-position constraints. Unit tests cover 0/1/N roots, fixed and automatic radius, three circular size modes, rotations, same-position classes, every formal edit entrance, rollback, unknown algorithm versions, budget failures, and reference vectors.
 

@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <functional>
+#include <limits>
 #include <map>
 #include <vector>
 
@@ -196,13 +197,23 @@ bool enforceCoupledCircular(const HrnPositionPointInput& input,
   const HrnCircularGeometryService geometry;
   // Jointly repair free siblings, then update and validate every parent from
   // leaves upward. A pinned subtree cannot be moved without breaking a class.
-  size_t cycle_budget = 1000;
+  size_t cycle_budget = std::numeric_limits<size_t>::max();
   for (int k = 0; k < 2; ++k) {
     const auto& side = result.sides[k];
-    cycle_budget = std::min(cycle_budget, side.root->layout().solveSettings().max_iterations);
-    for (const auto& section : side.sections)
-      cycle_budget = std::min(cycle_budget, section->layout().solveSettings().max_iterations);
+    const Tree& tree = trees[k];
+    if (tree.roots.size() > 1) {
+      bool coupled_root = false;
+      for (size_t root : tree.roots) coupled_root = coupled_root || tree.pinned_subtree[root];
+      if (coupled_root)
+        cycle_budget = std::min(cycle_budget,
+            side.root->layout().solveSettings().max_iterations);
+    }
+    for (size_t i = 0; i < side.sections.size(); ++i)
+      if (tree.pinned_subtree[i] && !tree.children[i].empty())
+        cycle_budget = std::min(cycle_budget,
+            side.sections[i]->layout().solveSettings().max_iterations);
   }
+  if (cycle_budget == std::numeric_limits<size_t>::max()) cycle_budget = 1;
   bool jointly_settled = false;
   for (size_t cycle = 0; cycle < cycle_budget; ++cycle) {
   bool changed = false;

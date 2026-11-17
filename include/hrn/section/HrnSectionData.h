@@ -32,5 +32,8 @@ class HrnSectionData {
   std::unique_ptr<HrnSectionShape> shape_;
   std::unique_ptr<HrnSectionLayout> layout_;
   HrnSectionOptions options_;
+  friend class HrnPositionPointInput;
+  friend class HrnPositionPoint;
+  friend class HrnPositionPointTransaction;
 };
 }  // namespace hrn

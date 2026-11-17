@@ -68,3 +68,71 @@ TEST(HrnPositionPointModel, CandidateRootsAndFormalEmpty) {
   ASSERT_TRUE(!HrnPositionPoint::createEmpty(m, std::unique_ptr<HrnSectionData>(raw2),
                                              std::unique_ptr<HrnSectionData>(raw2)));
 }
+
+TEST(HrnPositionPointModel, RejectsAliasedOwnedObjectsAcrossSides) {
+  Matrix4D matrix;
+  HrnSegment a, b;
+  {
+    auto candidate = HrnPositionPointInput::create(matrix, section(), section());
+    ASSERT_TRUE(candidate);
+    HrnSectionData* shared = section(1).release();
+    ASSERT_TRUE(candidate->append(ZeHrnSide::Positive, a,
+                                  std::unique_ptr<HrnSectionData>(shared)));
+    const bool accepted = candidate->append(ZeHrnSide::Negative, b,
+                                            std::unique_ptr<HrnSectionData>(shared));
+    EXPECT_FALSE(accepted);
+    if (accepted) candidate.release(); // Keep the failing pre-fix run from double-freeing.
+  }
+  {
+    auto candidate = HrnPositionPointInput::create(matrix, section(), section());
+    ASSERT_TRUE(candidate);
+    HrnSectionShape* shared_shape = HrnCircularSectionShape::create(1, 1e-9).release();
+    HrnSectionOptions options;
+    auto first = HrnSectionData::create(std::unique_ptr<HrnSectionShape>(shared_shape),
+        std::unique_ptr<HrnSectionLayout>(new HrnRuleBasedLayout()), options);
+    auto second = HrnSectionData::create(std::unique_ptr<HrnSectionShape>(shared_shape),
+        std::unique_ptr<HrnSectionLayout>(new HrnRuleBasedLayout()), options);
+    ASSERT_TRUE(candidate->append(ZeHrnSide::Positive, a, std::move(first)));
+    const bool accepted = candidate->append(ZeHrnSide::Negative, b, std::move(second));
+    EXPECT_FALSE(accepted);
+    if (accepted) candidate.release();
+  }
+  {
+    auto candidate = HrnPositionPointInput::create(matrix, section(), section());
+    ASSERT_TRUE(candidate);
+    HrnSectionLayout* shared_layout = new HrnRuleBasedLayout();
+    HrnSectionOptions options;
+    auto first = HrnSectionData::create(HrnCircularSectionShape::create(1, 1e-9),
+        std::unique_ptr<HrnSectionLayout>(shared_layout), options);
+    auto second = HrnSectionData::create(HrnCircularSectionShape::create(1, 1e-9),
+        std::unique_ptr<HrnSectionLayout>(shared_layout), options);
+    ASSERT_TRUE(candidate->append(ZeHrnSide::Positive, a, std::move(first)));
+    const bool accepted = candidate->append(ZeHrnSide::Negative, b, std::move(second));
+    EXPECT_FALSE(accepted);
+    if (accepted) candidate.release();
+  }
+  {
+    HrnSectionShape* shared_shape = HrnCircularSectionShape::create(1, 1e-9).release();
+    HrnSectionOptions options;
+    auto positive = HrnSectionData::create(std::unique_ptr<HrnSectionShape>(shared_shape),
+        std::unique_ptr<HrnSectionLayout>(new HrnRuleBasedLayout()), options);
+    auto negative = HrnSectionData::create(std::unique_ptr<HrnSectionShape>(shared_shape),
+        std::unique_ptr<HrnSectionLayout>(new HrnRuleBasedLayout()), options);
+    auto candidate = HrnPositionPointInput::create(matrix, std::move(positive),
+                                                    std::move(negative));
+    EXPECT_FALSE(candidate);
+    if (candidate) candidate.release();
+  }
+  {
+    HrnSectionLayout* shared_layout = new HrnRuleBasedLayout();
+    HrnSectionOptions options;
+    auto positive = HrnSectionData::create(HrnCircularSectionShape::create(1, 1e-9),
+        std::unique_ptr<HrnSectionLayout>(shared_layout), options);
+    auto negative = HrnSectionData::create(HrnCircularSectionShape::create(1, 1e-9),
+        std::unique_ptr<HrnSectionLayout>(shared_layout), options);
+    auto point = HrnPositionPoint::createEmpty(matrix, std::move(positive),
+                                               std::move(negative));
+    EXPECT_FALSE(point);
+    if (point) point.release();
+  }
+}
