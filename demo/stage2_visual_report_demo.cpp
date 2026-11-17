@@ -38,15 +38,40 @@ hrn::HrnSectionTestCase makeCase(bool conflict) {
       .relate("P2", "N2", false).relate("P3", "N3", conflict);
   return builder.build();
 }
-bool writeCase(const std::string& path, bool conflict) {
-  auto candidate = makeCase(conflict);
+hrn::HrnSectionTestCase makeNestedPairsCase() {
+  using namespace hrn;
+  Matrix4D matrix;
+  HrnCircularSectionCaseOptions root;
+  root.radius = 20;
+  HrnCircularSectionCaseOptions parent;
+  parent.radius = 6;
+  HrnCircularSectionCaseOptions child;
+  child.radius = 1;
+  HrnSectionCaseBuilder builder;
+  builder.positionTransform(matrix).modelingTolerance(1e-9)
+      .segment("p0").segment("p1").segment("p2")
+      .segment("n0").segment("n1").segment("n2")
+      .parent("p1", "p0").parent("p2", "p0")
+      .parent("n1", "n0").parent("n2", "n0")
+      .sideRootCircular(ZeHrnSide::Positive, root)
+      .sideRootCircular(ZeHrnSide::Negative, root)
+      .circularSection(ZeHrnSide::Positive, "p0", parent)
+      .circularSection(ZeHrnSide::Positive, "p1", child)
+      .circularSection(ZeHrnSide::Positive, "p2", child)
+      .circularSection(ZeHrnSide::Negative, "n0", parent)
+      .circularSection(ZeHrnSide::Negative, "n1", child)
+      .circularSection(ZeHrnSide::Negative, "n2", child)
+      .relate("p1", "n1", true).relate("p2", "n2", true);
+  return builder.build();
+}
+bool writeCase(const std::string& path, hrn::HrnSectionTestCase candidate, bool expect_conflict) {
   if (!candidate.succeeded) {
     std::cerr << candidate.error << '\n';
     return false;
   }
   hrn::HrnPositionPointSolver solver;
   auto solved = solver.solveCircular(*candidate.input, candidate.relations);
-  if (solved.status.committed == conflict) {
+  if (solved.status.committed == expect_conflict) {
     std::cerr << "unexpected solve status for " << path << '\n';
     return false;
   }
@@ -75,9 +100,11 @@ int main(int argc, char** argv) {
       return 2;
     }
   }
-  if (!writeCase(directory + "/stage2-solved.html", false) ||
-      !writeCase(directory + "/stage1-mapping-conflict.html", true)) return 1;
+  if (!writeCase(directory + "/stage2-solved.html", makeCase(false), false) ||
+      !writeCase(directory + "/stage1-mapping-conflict.html", makeCase(true), true) ||
+      !writeCase(directory + "/stage2-nested-pairs.html", makeNestedPairsCase(), false)) return 1;
   std::cout << directory + "/stage2-solved.html\n"
-            << directory + "/stage1-mapping-conflict.html\n";
+            << directory + "/stage1-mapping-conflict.html\n"
+            << directory + "/stage2-nested-pairs.html\n";
   return 0;
 }
