@@ -1,6 +1,6 @@
 # Stage 1 gate: standalone core PASS
 
-Date: 2026-11-16 (Asia/Shanghai)
+Gate date: 2026-11-16; review fixes verified 2026-11-17 (Asia/Shanghai).
 
 - Compiler: GNU C++ 13.3.0 at `/usr/bin/c++`; generated compile flags include `-std=c++14 -Wall -Wextra -Wpedantic`.
 - Configure/build: `cmake -S . -B build-stage1 -DHRN_BUILD_TESTS=ON -DHRN_MAX_STAGE=1 && cmake --build build-stage1 --parallel` — PASS.
@@ -10,3 +10,5 @@ Date: 2026-11-16 (Asia/Shanghai)
 - Product adapter gate: configuring `HRN_ENABLE_PRODUCT_ADAPTER=ON` without a product checkout fails at configure time as required. See [product integration profile](product-integration-profile.md); product integration is unresolved.
 
 The acceptance fixture covers five Segment levels, six positive and three negative members, one-to-one, one-to-many and many-to-one relations, two explicit same-position edges, distinct owned Section/Shape/Layout objects, a translated rotated rigid matrix, positive side Root auto-resize, and persisted Rule Based solve settings. The tests validate candidate input construction only; Stage 1 has no layout solver or solved nonempty Position Point.
+
+Review follow-up: regression tests cover per-side Root derivation when a parent is absent from that side, reuse of a Segment across sides, failed Builder payload cleanup, Root validation against the final modeling tolerance, invalid enum values, aliased Root rejection, and angle normalization at the rounding boundary. The same six test executables pass with AddressSanitizer and leak detection enabled.

@@ -5,10 +5,11 @@ namespace hrn {
 HrnPositionPoint::HrnPositionPoint(const Matrix4D& m,std::unique_ptr<HrnSectionData> p,std::unique_ptr<HrnSectionData> n) : transform_(m) { sides_[0].root=std::move(p); sides_[1].root=std::move(n); }
 bool HrnPositionPoint::validateSectionData(const HrnSectionData& section) {
  const HrnSectionDimensions d=section.shape().dimensions();
- return d.shape_type==ZeHrnSectionShapeType::Circular&&std::isfinite(d.primary)&&d.primary>0&&std::isfinite(section.rotation())&&section.layout().type()==ZeHrnSectionLayoutType::RuleBased&&section.layout().solveSettings().valid()&&std::isfinite(section.layout().spacingTolerance())&&section.layout().spacingTolerance()>=0;
+ return d.shape_type==ZeHrnSectionShapeType::Circular&&std::isfinite(d.primary)&&d.primary>0&&std::isfinite(section.rotation())&&section.layout().type()==ZeHrnSectionLayoutType::RuleBased&&section.layout().solveSettings().valid()&&std::isfinite(section.layout().spacingTolerance())&&section.layout().spacingTolerance()>=0&&(section.sizeUpdateMode()==HrnSectionSizeUpdateMode::KeepRatioConstant||section.sizeUpdateMode()==HrnSectionSizeUpdateMode::KeepSmallestValue||section.sizeUpdateMode()==HrnSectionSizeUpdateMode::KeepGreatestValue);
 }
 std::unique_ptr<HrnPositionPoint> HrnPositionPoint::createEmpty(const Matrix4D& m,std::unique_ptr<HrnSectionData> p,std::unique_ptr<HrnSectionData> n) {
- if(!isRigidTransform(m,1e-9)||!p||!n||p.get()==n.get()||!validateSectionData(*p)||!validateSectionData(*n)) return std::unique_ptr<HrnPositionPoint>();
+ if(p&&p.get()==n.get()) { n.release(); return std::unique_ptr<HrnPositionPoint>(); }
+ if(!isRigidTransform(m,1e-9)||!p||!n||!validateSectionData(*p)||!validateSectionData(*n)) return std::unique_ptr<HrnPositionPoint>();
  return std::unique_ptr<HrnPositionPoint>(new HrnPositionPoint(m,std::move(p),std::move(n)));
 }
 std::unique_ptr<HrnPositionPoint> HrnPositionPoint::createEmpty(const Matrix4D& m,const HrnRootSectionDefaultProvider& p) { return createEmpty(m,p.create(ZeHrnSide::Positive),p.create(ZeHrnSide::Negative)); }
@@ -23,5 +24,5 @@ Point3D HrnPositionPoint::locationAt(ZeHrnSide s,size_t i) const { return side(s
 const HrnSectionData& HrnPositionPoint::sectionAt(ZeHrnSide s,size_t i) const { return *side(s).sections.at(i); }
 const HrnSectionData& HrnPositionPoint::sideRootSection(ZeHrnSide s) const { return *side(s).root; }
 bool HrnPositionPoint::findSectionIndex(ZeHrnSide s,const HrnSegment& segment,size_t& index) const { const auto& entries=side(s).segments; auto it=std::find(entries.begin(),entries.end(),&segment); if(it==entries.end()) return false; index=static_cast<size_t>(it-entries.begin()); return true; }
-const HrnSectionData* HrnPositionPoint::getEffectiveRootSection(ZeHrnSide s) const { const auto& d=side(s); size_t count=0,index=0; for(size_t i=0;i<d.segments.size();++i) if(!d.segments[i]->parent()) { ++count; index=i; } return count==0?0:(count==1?d.sections[index].get():d.root.get()); }
+const HrnSectionData* HrnPositionPoint::getEffectiveRootSection(ZeHrnSide s) const { const auto& d=side(s); size_t count=0,index=0; for(size_t i=0;i<d.segments.size();++i) if(std::find(d.segments.begin(),d.segments.end(),d.segments[i]->parent())==d.segments.end()) { ++count; index=i; } return count==0?0:(count==1?d.sections[index].get():d.root.get()); }
 }

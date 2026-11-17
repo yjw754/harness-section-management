@@ -3,6 +3,7 @@
 #include "hrn/section/HrnSectionData.h"
 #include "hrn/section/HrnSegment.h"
 #include <vector>
+#include <stdexcept>
 namespace hrn {
 class HrnPositionPointInput {
 public:
@@ -18,8 +19,8 @@ public:
 private:
  struct SideData { std::vector<HrnSegment*> segments; std::vector<std::unique_ptr<HrnSectionData> > sections; std::unique_ptr<HrnSectionData> root; };
  HrnPositionPointInput(const Matrix4D& transform,std::unique_ptr<HrnSectionData> positive_root,std::unique_ptr<HrnSectionData> negative_root);
- const SideData& side(ZeHrnSide value) const { return sides_[value==ZeHrnSide::Positive?0:1]; }
- SideData& side(ZeHrnSide value) { return sides_[value==ZeHrnSide::Positive?0:1]; }
+ const SideData& side(ZeHrnSide value) const { if(value!=ZeHrnSide::Positive&&value!=ZeHrnSide::Negative) throw std::invalid_argument("invalid side"); return sides_[value==ZeHrnSide::Positive?0:1]; }
+ SideData& side(ZeHrnSide value) { if(value!=ZeHrnSide::Positive&&value!=ZeHrnSide::Negative) throw std::invalid_argument("invalid side"); return sides_[value==ZeHrnSide::Positive?0:1]; }
  Matrix4D transform_;
  SideData sides_[2];
 };

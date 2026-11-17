@@ -24,7 +24,7 @@ struct HrnSectionTestCase {
 };
 class HrnSectionCaseBuilder {
 public:
- HrnSectionCaseBuilder() : has_transform_(false),modeling_tolerance_(0),valid_(true) {}
+ HrnSectionCaseBuilder() : has_transform_(false),modeling_tolerance_(0),valid_(true),has_root_{false,false} {}
  HrnSectionCaseBuilder& positionTransform(const Matrix4D& transform);
  HrnSectionCaseBuilder& modelingTolerance(double tolerance);
  HrnSectionCaseBuilder& segment(const std::string& label);
@@ -42,7 +42,8 @@ private:
  double modeling_tolerance_;
  bool valid_;
  HrnOwnedSegmentGraph graph_;
- std::unique_ptr<HrnSectionData> roots_[2];
+ HrnCircularSectionCaseOptions root_options_[2];
+ bool has_root_[2];
  std::vector<Entry> entries_;
  std::vector<RelationEntry> relations_;
 };

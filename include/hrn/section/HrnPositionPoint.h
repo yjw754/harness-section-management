@@ -22,7 +22,7 @@ public:
 private:
  struct SideData { std::vector<HrnSegment*> segments; std::vector<Point3D> locations; std::vector<std::unique_ptr<HrnSectionData> > sections; std::unique_ptr<HrnSectionData> root; };
  HrnPositionPoint(const Matrix4D& transform,std::unique_ptr<HrnSectionData> positive_root,std::unique_ptr<HrnSectionData> negative_root);
- const SideData& side(ZeHrnSide value) const { return sides_[value==ZeHrnSide::Positive?0:1]; }
+ const SideData& side(ZeHrnSide value) const { if(value!=ZeHrnSide::Positive&&value!=ZeHrnSide::Negative) throw std::invalid_argument("invalid side"); return sides_[value==ZeHrnSide::Positive?0:1]; }
  Matrix4D transform_;
  SideData sides_[2];
  friend class HrnPositionPointSolver;

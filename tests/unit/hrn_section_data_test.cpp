@@ -19,4 +19,6 @@ int main() {
  CHECK(!section->setRotation(std::numeric_limits<double>::infinity()));
  std::unique_ptr<HrnSectionData> copy=section->clone(); CHECK(copy); CHECK(&copy->shape()!=&section->shape()); CHECK(&copy->layout()!=&section->layout());
  CHECK(copy->shape().dimensions()==HrnSectionDimensions::circle(3));
+ HrnSectionOptions invalidOptions; invalidOptions.size_update_mode=static_cast<HrnSectionSizeUpdateMode>(99);
+ CHECK(!HrnSectionData::create(HrnCircularSectionShape::create(2,1e-6),bad.clone(),invalidOptions));
 }

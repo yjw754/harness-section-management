@@ -14,36 +14,36 @@ HrnSectionCaseBuilder& HrnSectionCaseBuilder::modelingTolerance(double t) { mode
 HrnSectionCaseBuilder& HrnSectionCaseBuilder::segment(const std::string& label) { HrnSegment* p=0; if(!graph_.tryAdd(label,p)) valid_=false; return *this; }
 HrnSectionCaseBuilder& HrnSectionCaseBuilder::parent(const std::string& child,const std::string& parent_label) { HrnSegment* c=graph_.find(child); HrnSegment* p=graph_.find(parent_label); if(!c||!p||!graph_.setParent(*c,*p)) valid_=false; return *this; }
 HrnSectionCaseBuilder& HrnSectionCaseBuilder::sideRootCircular(ZeHrnSide side,const HrnCircularSectionCaseOptions& options) {
+ if(side!=ZeHrnSide::Positive&&side!=ZeHrnSide::Negative) { valid_=false; return *this; }
  const int i=side==ZeHrnSide::Positive?0:1;
- if(roots_[i]) valid_=false;
- roots_[i]=createCircular(options,modeling_tolerance_);
- if(!roots_[i]) valid_=false; return *this;
+ if(has_root_[i]) valid_=false;
+ root_options_[i]=options; has_root_[i]=true; return *this;
 }
-HrnSectionCaseBuilder& HrnSectionCaseBuilder::circularSection(ZeHrnSide side,const std::string& label,const HrnCircularSectionCaseOptions& options) { entries_.push_back({side,label,options}); return *this; }
+HrnSectionCaseBuilder& HrnSectionCaseBuilder::circularSection(ZeHrnSide side,const std::string& label,const HrnCircularSectionCaseOptions& options) { if(side!=ZeHrnSide::Positive&&side!=ZeHrnSide::Negative) valid_=false; entries_.push_back({side,label,options}); return *this; }
 HrnSectionCaseBuilder& HrnSectionCaseBuilder::relate(const std::string& p,const std::string& n,bool same) { relations_.push_back({p,n,same}); return *this; }
 HrnSectionTestCase HrnSectionCaseBuilder::build() {
  HrnSectionTestCase result;
- if(!valid_||!has_transform_||!std::isfinite(modeling_tolerance_)||modeling_tolerance_<=0||!roots_[0]||!roots_[1]) { result.error="missing or invalid matrix, tolerance, root, or topology"; return result; }
- std::map<HrnSegment*,ZeHrnSide> membership;
+ if(!valid_||!has_transform_||!std::isfinite(modeling_tolerance_)||modeling_tolerance_<=0||!has_root_[0]||!has_root_[1]) { result.error="missing or invalid matrix, tolerance, root, or topology"; return result; }
+ std::unique_ptr<HrnSectionData> positive_root=createCircular(root_options_[0],modeling_tolerance_);
+ std::unique_ptr<HrnSectionData> negative_root=createCircular(root_options_[1],modeling_tolerance_);
+ if(!positive_root||!negative_root) { result.error="invalid side Root Section"; return result; }
+ std::set<HrnSegment*> membership[2];
  for(const Entry& e:entries_) {
   HrnSegment* p=graph_.find(e.label);
-  if(!p||membership.count(p)||!createCircular(e.options,modeling_tolerance_)) { result.error="invalid, empty, or repeated Segment section"; return result; }
-  membership[p]=e.side;
- }
- for(const auto& member:membership) if(member.first->parent()) {
-  auto parent=membership.find(member.first->parent());
-  if(parent==membership.end()||parent->second!=member.second) { result.error="parent missing from same side"; return result; }
+  const int side=e.side==ZeHrnSide::Positive?0:1;
+  if(!p||!membership[side].insert(p).second||!createCircular(e.options,modeling_tolerance_)) { result.error="invalid, empty, or repeated Segment section"; return result; }
  }
  std::set<std::pair<HrnSegment*,HrnSegment*> > pairs;
+ std::vector<HrnSegmentSideRelation> relations;
  for(const RelationEntry& e:relations_) {
   HrnSegment* p=graph_.find(e.positive); HrnSegment* n=graph_.find(e.negative);
-  if(!p||!n||!membership.count(p)||!membership.count(n)||membership[p]!=ZeHrnSide::Positive||membership[n]!=ZeHrnSide::Negative||!pairs.insert(std::make_pair(p,n)).second) { result.error="invalid or repeated side relation"; return result; }
-  result.relations.push_back({p,n,e.same_position});
+  if(!p||!n||!membership[0].count(p)||!membership[1].count(n)||!pairs.insert(std::make_pair(p,n)).second) { result.error="invalid or repeated side relation"; return result; }
+  relations.push_back({p,n,e.same_position});
  }
- result.input=HrnPositionPointInput::create(transform_,std::move(roots_[0]),std::move(roots_[1]));
+ result.input=HrnPositionPointInput::create(transform_,std::move(positive_root),std::move(negative_root));
  if(!result.input) { result.error="invalid Position Point input"; return result; }
  for(const Entry& e:entries_) if(!result.input->append(e.side,*graph_.find(e.label),createCircular(e.options,modeling_tolerance_))) { result.error="section append failed"; result.input.reset(); return result; }
- result.graph=std::move(graph_); result.modeling_tolerance=modeling_tolerance_; result.succeeded=true; return result;
+ result.graph=std::move(graph_); result.relations=std::move(relations); result.modeling_tolerance=modeling_tolerance_; result.succeeded=true; return result;
 }
 HrnSectionTestCase makeFiveLevelMappedCircularCase() {
  Matrix4D matrix; matrix.m[0][0]=0; matrix.m[0][1]=-1; matrix.m[1][0]=1; matrix.m[1][1]=0;
