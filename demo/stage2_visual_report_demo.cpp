@@ -38,7 +38,7 @@ hrn::HrnSectionTestCase makeCase(bool conflict) {
       .relate("P2", "N2", false).relate("P3", "N3", conflict);
   return builder.build();
 }
-hrn::HrnSectionTestCase makeNestedPairsCase() {
+hrn::HrnSectionTestCase makeNestedPairsCase(bool two_pairs) {
   using namespace hrn;
   Matrix4D matrix;
   HrnCircularSectionCaseOptions root;
@@ -61,7 +61,8 @@ hrn::HrnSectionTestCase makeNestedPairsCase() {
       .circularSection(ZeHrnSide::Negative, "n0", parent)
       .circularSection(ZeHrnSide::Negative, "n1", child)
       .circularSection(ZeHrnSide::Negative, "n2", child)
-      .relate("p1", "n1", true).relate("p2", "n2", true);
+      .relate("p1", "n1", true);
+  if (two_pairs) builder.relate("p2", "n2", true);
   return builder.build();
 }
 bool writeCase(const std::string& path, hrn::HrnSectionTestCase candidate, bool expect_conflict) {
@@ -102,9 +103,11 @@ int main(int argc, char** argv) {
   }
   if (!writeCase(directory + "/stage2-solved.html", makeCase(false), false) ||
       !writeCase(directory + "/stage1-mapping-conflict.html", makeCase(true), true) ||
-      !writeCase(directory + "/stage2-nested-pairs.html", makeNestedPairsCase(), false)) return 1;
+      !writeCase(directory + "/stage2-nested-pairs.html", makeNestedPairsCase(true), false) ||
+      !writeCase(directory + "/stage2-single-mapped-pair.html", makeNestedPairsCase(false), false)) return 1;
   std::cout << directory + "/stage2-solved.html\n"
             << directory + "/stage1-mapping-conflict.html\n"
-            << directory + "/stage2-nested-pairs.html\n";
+            << directory + "/stage2-nested-pairs.html\n"
+            << directory + "/stage2-single-mapped-pair.html\n";
   return 0;
 }

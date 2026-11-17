@@ -161,6 +161,38 @@ TEST(HrnCircularTransaction, TwoNestedSiblingPairsShareCentersAcrossSides) {
                        positive.centers2d[1].y - positive.centers2d[2].y), 2 - 1e-9);
 }
 
+TEST(HrnCircularTransaction, OneNestedSiblingPairSharesCenterAcrossSides) {
+  HrnSegment p0, p1, p2, n0, n1, n2;
+  ASSERT_TRUE(p1.attachTo(p0));
+  ASSERT_TRUE(p2.attachTo(p0));
+  ASSERT_TRUE(n1.attachTo(n0));
+  ASSERT_TRUE(n2.attachTo(n0));
+  auto candidate = input(20);
+  ASSERT_TRUE(candidate->append(ZeHrnSide::Positive, p0, section(6)));
+  ASSERT_TRUE(candidate->append(ZeHrnSide::Positive, p1, section(1)));
+  ASSERT_TRUE(candidate->append(ZeHrnSide::Positive, p2, section(1)));
+  ASSERT_TRUE(candidate->append(ZeHrnSide::Negative, n0, section(6)));
+  ASSERT_TRUE(candidate->append(ZeHrnSide::Negative, n1, section(1)));
+  ASSERT_TRUE(candidate->append(ZeHrnSide::Negative, n2, section(1)));
+
+  HrnPositionPointSolver solver;
+  auto solved = solver.solveCircular(*candidate, {{&p1, &n1, true}});
+  ASSERT_TRUE(solved.status.committed);
+  const auto& positive = solved.side(ZeHrnSide::Positive);
+  const auto& negative = solved.side(ZeHrnSide::Negative);
+  ASSERT_EQ(positive.centers2d.size(), 3u);
+  ASSERT_EQ(negative.centers2d.size(), 3u);
+  EXPECT_NEAR(positive.centers2d[1].x, negative.centers2d[1].x, 1e-9);
+  EXPECT_NEAR(positive.centers2d[1].y, negative.centers2d[1].y, 1e-9);
+  for (const auto* side : {&positive, &negative}) {
+    for (size_t i : {1u, 2u})
+      EXPECT_LE(std::hypot(side->centers2d[i].x - side->centers2d[0].x,
+                           side->centers2d[i].y - side->centers2d[0].y) + 1, 6 + 1e-9);
+    EXPECT_GE(std::hypot(side->centers2d[1].x - side->centers2d[2].x,
+                         side->centers2d[1].y - side->centers2d[2].y), 2 - 1e-9);
+  }
+}
+
 TEST(HrnCircularTransaction, IncompatibleConnectedClassHasConflictWitness) {
   HrnSegment p, q, n;
   auto candidate = input(10);

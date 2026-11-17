@@ -14,6 +14,8 @@ Open `build-visual/reports/stage2-solved.html` and
 `build-visual/reports/stage2-nested-pairs.html` shows the unit-test case with
 `p0` containing `p1` and `p2`, `n0` containing `n1` and `n2`, and two
 same-position relations (`p1`–`n1`, `p2`–`n2`).
+`build-visual/reports/stage2-single-mapped-pair.html` uses the same nesting
+with only the `p1`–`n1` same-position relation.
 The reports contain inline CSS, SVG, and JavaScript and require no server or network.
 Click a tree node, mapping row, or circle to inspect a section and highlight its
 mapped peer. Clicking one mapping row highlights only that relation and shows
