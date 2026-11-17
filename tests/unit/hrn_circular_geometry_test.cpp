@@ -70,3 +70,20 @@ TEST(HrnCircularGeometry, RejectsInvalidGeometryAndTolerance) {
   EXPECT_FALSE(geometry.containsWithClearance(valid, valid, 0, -1).valid);
   EXPECT_FALSE(geometry.intersects(valid, HrnCircle2D{{0, 0}, -1}, 1e-9));
 }
+
+TEST(HrnCircularGeometry, MinimumEnclosingCircleRecentersNestedMembers) {
+  HrnCircularGeometryService geometry;
+  const auto pair = geometry.minimumEnclosingCircle(
+      {HrnCircle2D{{0, 0}, 1}, HrnCircle2D{{2, 0}, 1}}, 1e-9);
+  ASSERT_TRUE(pair.valid);
+  EXPECT_NEAR(pair.circle.center.x, 1, 1e-9);
+  EXPECT_NEAR(pair.circle.center.y, 0, 1e-9);
+  EXPECT_NEAR(pair.circle.radius, 2, 1e-9);
+  const auto triangle = geometry.minimumEnclosingCircle(
+      {HrnCircle2D{{0, 0}, 1}, HrnCircle2D{{2, 0}, 1},
+       HrnCircle2D{{1, std::sqrt(3.0)}, 1}}, 1e-9);
+  ASSERT_TRUE(triangle.valid);
+  EXPECT_NEAR(triangle.circle.center.x, 1, 1e-9);
+  EXPECT_NEAR(triangle.circle.center.y, 1 / std::sqrt(3.0), 1e-9);
+  EXPECT_NEAR(triangle.circle.radius, 1 + 2 / std::sqrt(3.0), 1e-9);
+}

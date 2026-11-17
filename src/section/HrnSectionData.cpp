@@ -26,6 +26,11 @@ std::unique_ptr<HrnSectionData> HrnSectionData::create(std::unique_ptr<HrnSectio
 std::unique_ptr<HrnSectionData> HrnSectionData::clone() const {
   return create(shape_->clone(), layout_->clone(), options_);
 }
+std::unique_ptr<HrnSectionData> HrnSectionData::withCircularRadius(
+    double radius, double modeling_tolerance) const {
+  return create(HrnCircularSectionShape::create(radius, modeling_tolerance),
+                layout_->clone(), options_);
+}
 bool HrnSectionData::setRotation(double r) {
   if (!std::isfinite(r)) return false;
   options_.rotation = normalizeDegrees(r);

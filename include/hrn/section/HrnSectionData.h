@@ -17,6 +17,8 @@ class HrnSectionData {
                                                 std::unique_ptr<HrnSectionLayout> layout,
                                                 const HrnSectionOptions& options);
   std::unique_ptr<HrnSectionData> clone() const;
+  std::unique_ptr<HrnSectionData> withCircularRadius(double radius,
+                                                      double modeling_tolerance) const;
   const HrnSectionShape& shape() const { return *shape_; }
   const HrnSectionLayout& layout() const { return *layout_; }
   double rotation() const { return options_.rotation; }

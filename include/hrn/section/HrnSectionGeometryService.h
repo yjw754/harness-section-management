@@ -1,5 +1,7 @@
 #pragma once
 
+#include <vector>
+
 #include "hrn/section/HrnGeometryTypes.h"
 
 namespace hrn {
@@ -23,6 +25,11 @@ struct HrnContainmentResult {
   Point2D child_witness{0, 0};
 };
 
+struct HrnMinimumEnclosingCircleResult {
+  bool valid = false;
+  HrnCircle2D circle{{0, 0}, 0};
+};
+
 class HrnCircularGeometryService {
  public:
   HrnContourDistanceResult signedDistance(const HrnCircle2D& lhs, const HrnCircle2D& rhs,
@@ -33,5 +40,7 @@ class HrnCircularGeometryService {
                                              double modeling_tolerance) const;
   bool intersects(const HrnCircle2D& lhs, const HrnCircle2D& rhs,
                   double modeling_tolerance) const;
+  HrnMinimumEnclosingCircleResult minimumEnclosingCircle(
+      const std::vector<HrnCircle2D>& circles, double modeling_tolerance) const;
 };
 }  // namespace hrn
