@@ -34,7 +34,7 @@
 | `demo/HrnSectionVisualReport.h/.cpp` | Generic report API, model extraction, HTML escaping, SVG/HTML document rendering |
 | `demo/stage2_visual_report_demo.cpp` | Builds the two documented cases and writes reports |
 | `tests/unit/hrn_section_visual_report_test.cpp` | Data identity, escaping, geometry, and failure rendering tests |
-| `tests/acceptance/stage2_visual_report_acceptance_test.cpp` | Demo artifact gate |
+| `tests/acceptance/verify_stage2_visual_report.cmake` | Demo artifact gate |
 | `CMakeLists.txt` | Optional Stage 2 report target and tests |
 | `docs/verification/stage2-visual-report.md` | Commands, report paths, browser inspection and results |
 
@@ -66,7 +66,7 @@
 
 **Files:** Create `demo/stage2_visual_report_demo.cpp`, `tests/acceptance/stage2_visual_report_acceptance_test.cpp`, `docs/verification/stage2-visual-report.md`; Modify `CMakeLists.txt`.
 
-**Interfaces:** `stage2_visual_report_demo <output-directory>` writes `stage2-solved.html` and `stage1-mapping-conflict.html`. The first solves a five-level bilateral variant; the second converts only the original fixture's algorithm version for Stage 2 and records its explicit equal-center conflict.
+**Interfaces:** `stage2_visual_report_demo <output-directory>` writes `stage2-solved.html` and `stage1-mapping-conflict.html`. The first solves a five-level bilateral variant; the second uses Stage 1 topology and mapping with Stage 2 algorithm version 1 and member auto-resize, and records its explicit equal-center conflict.
 
 - [ ] Write acceptance test that runs the demo into a test output directory and checks both files, status, tree labels, mapping type, and solved versus failed circle presence.
 - [ ] Run the test target; expect FAIL before demo/CMake wiring.

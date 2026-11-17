@@ -1,0 +1,83 @@
+#include "HrnSectionVisualReport.h"
+
+#include <fstream>
+#include <iostream>
+#include <string>
+#include <sys/stat.h>
+
+#include "HrnSectionCaseBuilder.h"
+
+namespace {
+hrn::HrnSectionTestCase makeCase(bool conflict) {
+  using namespace hrn;
+  Matrix4D matrix;
+  matrix.m[0][0] = 0; matrix.m[0][1] = -1;
+  matrix.m[1][0] = 1; matrix.m[1][1] = 0;
+  matrix.m[0][3] = 10; matrix.m[1][3] = 20; matrix.m[2][3] = 30;
+  HrnCircularSectionCaseOptions root;
+  root.radius = 20;
+  root.auto_resize_enabled = true;
+  HrnCircularSectionCaseOptions member;
+  member.radius = 2;
+  member.auto_resize_enabled = true;
+  member.spacing = 0.2;
+  member.solve_settings = HrnLayoutSolveSettings(1, 100, 1e-8);
+  HrnSectionCaseBuilder builder;
+  builder.positionTransform(matrix).modelingTolerance(1e-6)
+      .segment("P1").segment("P2").segment("P3").segment("P4")
+      .segment("P5").segment("P6").segment("N1").segment("N2").segment("N3")
+      .parent("P2", "P1").parent("P3", "P2").parent("P4", "P3")
+      .parent("P5", "P4")
+      .sideRootCircular(ZeHrnSide::Positive, root)
+      .sideRootCircular(ZeHrnSide::Negative, root);
+  for (const char* label : {"P1", "P2", "P3", "P4", "P5", "P6"})
+    builder.circularSection(ZeHrnSide::Positive, label, member);
+  for (const char* label : {"N1", "N2", "N3"})
+    builder.circularSection(ZeHrnSide::Negative, label, member);
+  builder.relate("P1", "N1", true).relate("P1", "N2", false)
+      .relate("P2", "N2", false).relate("P3", "N3", conflict);
+  return builder.build();
+}
+bool writeCase(const std::string& path, bool conflict) {
+  auto candidate = makeCase(conflict);
+  if (!candidate.succeeded) {
+    std::cerr << candidate.error << '\n';
+    return false;
+  }
+  hrn::HrnPositionPointSolver solver;
+  auto solved = solver.solveCircular(*candidate.input, candidate.relations);
+  if (solved.status.committed == conflict) {
+    std::cerr << "unexpected solve status for " << path << '\n';
+    return false;
+  }
+  auto model = hrn::buildVisualReportModel(*candidate.input, candidate.relations, solved,
+      [&](const hrn::HrnSegment& segment) { return candidate.graph.labelOf(segment); });
+  if (!model.valid) {
+    std::cerr << model.error << '\n';
+    return false;
+  }
+  std::ofstream file(path.c_str(), std::ios::binary);
+  if (!file) return false;
+  file << hrn::renderVisualReportHtml(model);
+  return static_cast<bool>(file);
+}
+}  // namespace
+int main(int argc, char** argv) {
+  if (argc != 2) {
+    std::cerr << "usage: stage2_visual_report_demo <output-directory>\n";
+    return 2;
+  }
+  const std::string directory = argv[1];
+  if (mkdir(directory.c_str(), 0755) != 0) {
+    struct stat info;
+    if (stat(directory.c_str(), &info) != 0 || !S_ISDIR(info.st_mode)) {
+      std::cerr << "cannot create output directory: " << directory << '\n';
+      return 2;
+    }
+  }
+  if (!writeCase(directory + "/stage2-solved.html", false) ||
+      !writeCase(directory + "/stage1-mapping-conflict.html", true)) return 1;
+  std::cout << directory + "/stage2-solved.html\n"
+            << directory + "/stage1-mapping-conflict.html\n";
+  return 0;
+}

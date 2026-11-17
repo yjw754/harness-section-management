@@ -44,7 +44,7 @@ The exporter receives `HrnPositionPointInput`, `HrnCircularHierarchyResult`, rel
 A demo executable writes two reports under the chosen output directory:
 
 - A solvable five-level bilateral case derived from the Stage 1 structure, with mapping edges and actual Stage 2 circle positions. Its explicit equal-center edges must be feasible.
-- The original Stage 1 five-level mapping case, with its incompatible explicit equal-center edges, shown as a failed solve with diagnostics. Its historical algorithm version is converted to the Stage 2 version only in the visualization demo input; the original Stage 1 fixture stays unchanged.
+- A five-level case with the Stage 1 topology and original mapping relations, including both explicit equal-center edges, shown as a failed solve with diagnostics. The visualization input uses algorithm version 1 and enables member auto-resize so its constraint conflict reaches the coupled Stage 2 solver; the original Stage 1 fixture stays unchanged.
 
 The public exporter accepts other cases; the demo cases are examples, not special rendering branches.
 
