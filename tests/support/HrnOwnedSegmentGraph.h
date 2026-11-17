@@ -11,6 +11,7 @@ class HrnOwnedSegmentGraph {
   bool tryAdd(const std::string& label, HrnSegment*& result);
   bool setParent(HrnSegment& child, HrnSegment& parent);
   HrnSegment* find(const std::string& label) const;
+  std::string labelOf(const HrnSegment& segment) const;
   size_t depth(const std::string& label) const;
   size_t size() const { return nodes_.size(); }
 

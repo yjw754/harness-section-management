@@ -21,6 +21,11 @@ HrnSegment* HrnOwnedSegmentGraph::find(const std::string& label) const {
   auto it = labels_.find(label);
   return it == labels_.end() ? 0 : it->second;
 }
+std::string HrnOwnedSegmentGraph::labelOf(const HrnSegment& segment) const {
+  for (const auto& entry : labels_)
+    if (entry.second == &segment) return entry.first;
+  return std::string();
+}
 size_t HrnOwnedSegmentGraph::depth(const std::string& label) const {
   HrnSegment* p = find(label);
   size_t n = 0;
