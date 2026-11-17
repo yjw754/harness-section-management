@@ -24,11 +24,13 @@ add_library(hrn_section_core ${HRN_CORE_SOURCES})
 target_include_directories(hrn_section_core PUBLIC include)
 target_compile_options(hrn_section_core PRIVATE -Wall -Wextra -Wpedantic)
 if(HRN_BUILD_TESTS)
+  if(POLICY CMP0135)
+    cmake_policy(SET CMP0135 NEW)
+  endif()
   include(FetchContent)
   FetchContent_Declare(googletest
     URL https://codeload.github.com/google/googletest/tar.gz/refs/tags/v1.16.0
-    URL_HASH SHA256=78c676fc63881529bf97bf9d45948d905a66833fbfa5318ea2cd7478cb98f399
-    DOWNLOAD_EXTRACT_TIMESTAMP TRUE)
+    URL_HASH SHA256=78c676fc63881529bf97bf9d45948d905a66833fbfa5318ea2cd7478cb98f399)
   set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
   set(BUILD_GMOCK OFF CACHE BOOL "" FORCE)
   FetchContent_MakeAvailable(googletest)
