@@ -6,7 +6,9 @@
 
 **Architecture:** 第一阶段建立 Position Point、Segment、Section Data 和正负侧 Segment 映射的候选输入模型及测试构造器；第二阶段只实现圆形截面的确定性规则布局；第三阶段在不改变事务和层级接口的前提下扩展椭圆、矩形及混合形状。三个阶段使用硬门禁串行推进，任何阶段未完成全部编译、单测和验收，不得开始下一阶段。
 
-**Tech Stack:** C++14、CMake、CTest、C++ 标准库；不引入第三方测试框架或智能/启发式布局依赖。
+**Tech Stack:** C++14、CMake、GoogleTest 1.16.0、CTest、C++ 标准库；不引入智能/启发式布局依赖。
+
+**测试框架修订（2026-11-17 用户要求）：** 所有阶段的单测与验收测试使用 GoogleTest，CTest 通过 `gtest_discover_tests` 注册；以下示例中的断言视为 GoogleTest `TEST` 测试体内的断言。GoogleTest 固定为支持 C++14 的 1.16.0 版本，正式库和测试均保持 C++14。
 
 **Spec:** `docs/superpowers/specs/2026-11-13-harness-position-point-section-data-design.md`；阶段范围以 2026-11-16 用户确认的三阶段约束为准；圆形规则参考 `docs/references/截面管理.md`。
 
@@ -129,7 +131,7 @@ Task 12 → Task 13 → Task 14 → Task 15 → Task 16 (Gate 3)
 - Create: `src/section/HrnGeometryTypes.cpp`
 - Create: `include/hrn/section/HrnSectionTypes.h`
 - Create: `src/section/HrnSectionTypes.cpp`
-- Create: `tests/TestSupport.h`
+- Use: GoogleTest assertions and `GTest::gtest_main`; no custom `TestSupport.h`.
 - Test: `tests/unit/hrn_cpp14_types_test.cpp`
 
 **Interfaces:**
@@ -139,14 +141,14 @@ Task 12 → Task 13 → Task 14 → Task 15 → Task 16 (Gate 3)
 - [ ] **Step 1: 写失败测试**
 
 ```cpp
-CHECK(isRigidTransform(identity, 1e-9));
-CHECK(!isRigidTransform(scale, 1e-9));
-CHECK(!isRigidTransform(shear, 1e-9));
-CHECK(!isRigidTransform(mirror, 1e-9));
-CHECK(!isRigidTransform(matrixContainingNaN, 1e-9));
-CHECK(!isRigidTransform(invalidLastRow, 1e-9));
-CHECK_NEAR(normalizeDegrees(-30.0), 330.0, 1e-12);
-CHECK(HrnSectionDimensions::circle(2.0).shape_type == ZeHrnSectionShapeType::Circular);
+ASSERT_TRUE(isRigidTransform(identity, 1e-9));
+ASSERT_TRUE(!isRigidTransform(scale, 1e-9));
+ASSERT_TRUE(!isRigidTransform(shear, 1e-9));
+ASSERT_TRUE(!isRigidTransform(mirror, 1e-9));
+ASSERT_TRUE(!isRigidTransform(matrixContainingNaN, 1e-9));
+ASSERT_TRUE(!isRigidTransform(invalidLastRow, 1e-9));
+ASSERT_NEAR(normalizeDegrees(-30.0), 330.0, 1e-12);
+ASSERT_TRUE(HrnSectionDimensions::circle(2.0).shape_type == ZeHrnSectionShapeType::Circular);
 ```
 
 - [ ] **Step 2: 运行测试确认失败**
@@ -191,12 +193,12 @@ git commit -m "feat: add c++14 section value types"
 HrnSegment* root = 0;
 HrnSegment* child = 0;
 HrnSegment* duplicate = 0;
-CHECK(graph.tryAdd("root", root));
-CHECK(graph.tryAdd("child", child));
-CHECK(graph.setParent(*child, *root));
-CHECK(child->parent() == root);
-CHECK(!graph.setParent(*root, *child));
-CHECK(!graph.tryAdd("root", duplicate));
+ASSERT_TRUE(graph.tryAdd("root", root));
+ASSERT_TRUE(graph.tryAdd("child", child));
+ASSERT_TRUE(graph.setParent(*child, *root));
+ASSERT_TRUE(child->parent() == root);
+ASSERT_TRUE(!graph.setParent(*root, *child));
+ASSERT_TRUE(!graph.tryAdd("root", duplicate));
 ```
 
 - [ ] **Step 2: 运行测试确认失败**
@@ -236,17 +238,17 @@ git commit -m "feat: add segment topology test graph"
 - [ ] **Step 1: 写圆形参数、Options 和 clone 测试**
 
 ```cpp
-CHECK(HrnCircularSectionShape::create(0.0, 1e-6).get() == 0);
-CHECK(section.rotation() == 0.0);
+ASSERT_TRUE(HrnCircularSectionShape::create(0.0, 1e-6).get() == 0);
+ASSERT_TRUE(section.rotation() == 0.0);
 section.setRotation(390.0);
-CHECK(section.rotation() == 30.0);
-CHECK(!invalidLayout.setSpacingTolerance(-0.1));
-CHECK(!invalidLayout.setSolveSettings(HrnLayoutSolveSettings(0, 0, 0.0)));
-CHECK(section.autoResizeEnabled() == false);
-CHECK(section.sizeUpdateMode() == HrnSectionSizeUpdateMode::KeepRatioConstant);
-CHECK(section.layout().type() == ZeHrnSectionLayoutType::RuleBased);
+ASSERT_TRUE(section.rotation() == 30.0);
+ASSERT_TRUE(!invalidLayout.setSpacingTolerance(-0.1));
+ASSERT_TRUE(!invalidLayout.setSolveSettings(HrnLayoutSolveSettings(0, 0, 0.0)));
+ASSERT_TRUE(section.autoResizeEnabled() == false);
+ASSERT_TRUE(section.sizeUpdateMode() == HrnSectionSizeUpdateMode::KeepRatioConstant);
+ASSERT_TRUE(section.layout().type() == ZeHrnSectionLayoutType::RuleBased);
 std::unique_ptr<HrnSectionData> copy = section.clone();
-CHECK(&copy->shape() != &section.shape());
+ASSERT_TRUE(&copy->shape() != &section.shape());
 ```
 
 - [ ] **Step 2: 运行测试确认失败**
@@ -286,17 +288,17 @@ git commit -m "feat: add circular section data"
 - [ ] **Step 1: 写输入一致性和 0/1/N Root 测试**
 
 ```cpp
-CHECK(input.append(Pos, root, section()));
-CHECK(!input.append(Pos, root, section()));
-CHECK(HrnPositionPointInput::create(validMatrix, nullRoot(), root()).get() == 0);
-CHECK(empty->getEffectiveRootSection(Pos) == 0);
-CHECK(singleInput.getEffectiveRootSection(Pos) == &singleInput.sectionAt(Pos, 0));
-CHECK(multipleInput.getEffectiveRootSection(Pos) == &multipleInput.sideRootSection(Pos));
-CHECK(defaults.create(Pos)->rotation() == 0.0);
-CHECK(defaults.create(Pos)->autoResizeEnabled() == false);
-CHECK(defaults.create(Pos)->shape().dimensions() == configuredDefaultDimensions);
-CHECK(defaults.create(Pos)->layout().solveSettings() == configuredDefaultSolveSettings);
-CHECK(&clone->sideRootSection(Pos) != &source.sideRootSection(Pos));
+ASSERT_TRUE(input.append(Pos, root, section()));
+ASSERT_TRUE(!input.append(Pos, root, section()));
+ASSERT_TRUE(HrnPositionPointInput::create(validMatrix, nullRoot(), root()).get() == 0);
+ASSERT_TRUE(empty->getEffectiveRootSection(Pos) == 0);
+ASSERT_TRUE(singleInput.getEffectiveRootSection(Pos) == &singleInput.sectionAt(Pos, 0));
+ASSERT_TRUE(multipleInput.getEffectiveRootSection(Pos) == &multipleInput.sideRootSection(Pos));
+ASSERT_TRUE(defaults.create(Pos)->rotation() == 0.0);
+ASSERT_TRUE(defaults.create(Pos)->autoResizeEnabled() == false);
+ASSERT_TRUE(defaults.create(Pos)->shape().dimensions() == configuredDefaultDimensions);
+ASSERT_TRUE(defaults.create(Pos)->layout().solveSettings() == configuredDefaultSolveSettings);
+ASSERT_TRUE(&clone->sideRootSection(Pos) != &source.sideRootSection(Pos));
 ```
 
 - [ ] **Step 2: 运行测试确认失败**
@@ -342,11 +344,11 @@ builder.circularSection(Pos, "P1", circleOptions(3.0, 0.0, 0.2));
 builder.circularSection(Neg, "N1", circleOptions(2.0, 0.0, 0.2));
 builder.circularSection(Neg, "N2", circleOptions(1.0, 0.0, 0.2));
 builder.relate("P1", "N1", true).relate("P1", "N2", false);
-CHECK(builder.build().relations.size() == 2);
-CHECK(!invalidBuilderWithWrongSideRelation.build().succeeded);
-CHECK(!builderMissingNegativeRoot.build().succeeded);
-CHECK(!builderWithDuplicateRelation.build().succeeded);
-CHECK(!builderWithConflictingRelationFlags.build().succeeded);
+ASSERT_TRUE(builder.build().relations.size() == 2);
+ASSERT_TRUE(!invalidBuilderWithWrongSideRelation.build().succeeded);
+ASSERT_TRUE(!builderMissingNegativeRoot.build().succeeded);
+ASSERT_TRUE(!builderWithDuplicateRelation.build().succeeded);
+ASSERT_TRUE(!builderWithConflictingRelationFlags.build().succeeded);
 ```
 
 - [ ] **Step 2: 运行测试确认失败**
@@ -389,13 +391,13 @@ git commit -m "feat: add section test case builder"
 
 ```cpp
 HrnSectionTestCase c = makeFiveLevelMappedCircularCase();
-CHECK(c.input.sectionCount(Pos) != c.input.sectionCount(Neg));
-CHECK(c.graph.depth("P5") == 5);
-CHECK(countSamePositionRelations(c) == 2);
-CHECK(allOwnedObjectsHaveDistinctAddresses(c));
-CHECK(c.input.positionTransform() == configuredMatrix);
-CHECK(c.input.sideRootSection(Pos).autoResizeEnabled() == configuredRootAutoResize);
-CHECK(c.input.sectionAt(Pos, 0).layout().solveSettings() == configuredSettings);
+ASSERT_TRUE(c.input.sectionCount(Pos) != c.input.sectionCount(Neg));
+ASSERT_TRUE(c.graph.depth("P5") == 5);
+ASSERT_TRUE(countSamePositionRelations(c) == 2);
+ASSERT_TRUE(allOwnedObjectsHaveDistinctAddresses(c));
+ASSERT_TRUE(c.input.positionTransform() == configuredMatrix);
+ASSERT_TRUE(c.input.sideRootSection(Pos).autoResizeEnabled() == configuredRootAutoResize);
+ASSERT_TRUE(c.input.sectionAt(Pos, 0).layout().solveSettings() == configuredSettings);
 ```
 
 - [ ] **Step 2: 运行 Stage 1 完整验收**
@@ -449,19 +451,19 @@ git commit -m "test: pass stage one input model gate"
 - [ ] **Step 1: 写相离、相切、重叠、包含和间距测试**
 
 ```cpp
-CHECK_NEAR(distance(circle(0, 0, 2), circle(5, 0, 1)).signed_distance, 2.0, 1e-9);
-CHECK(!contains(parentR5, childAt4R2, 0.0).contained);
-CHECK(contains(parentR5, childAt2R2, 1.0).contained);
-CHECK(intersects(circle(0, 0, 2), circle(3, 0, 2)));
-CHECK(diagnostic.stage == HrnSectionFailureStage::GeometryValidation);
-CHECK(diagnostic.algorithm_version == configuredVersion);
-CHECK(diagnostic.iterations_used == configuredIterations);
-CHECK(conflict.has_measured_value && conflict.has_required_value);
-CHECK(conflict.has_lhs_witness && conflict.has_rhs_witness);
-CHECK(adjustment.certainty == HrnSectionAdjustmentCertainty::SufficientForCurrentPlacement);
-CHECK(noSolutionAdjustment.certainty == HrnSectionAdjustmentCertainty::HeuristicSuggestion);
-CHECK(iterationBudgetAdjustment.parameter == HrnSectionParameterKey::MaxIterations);
-CHECK(internalError.adjustments.empty());
+ASSERT_NEAR(distance(circle(0, 0, 2), circle(5, 0, 1)).signed_distance, 2.0, 1e-9);
+ASSERT_TRUE(!contains(parentR5, childAt4R2, 0.0).contained);
+ASSERT_TRUE(contains(parentR5, childAt2R2, 1.0).contained);
+ASSERT_TRUE(intersects(circle(0, 0, 2), circle(3, 0, 2)));
+ASSERT_TRUE(diagnostic.stage == HrnSectionFailureStage::GeometryValidation);
+ASSERT_TRUE(diagnostic.algorithm_version == configuredVersion);
+ASSERT_TRUE(diagnostic.iterations_used == configuredIterations);
+ASSERT_TRUE(conflict.has_measured_value && conflict.has_required_value);
+ASSERT_TRUE(conflict.has_lhs_witness && conflict.has_rhs_witness);
+ASSERT_TRUE(adjustment.certainty == HrnSectionAdjustmentCertainty::SufficientForCurrentPlacement);
+ASSERT_TRUE(noSolutionAdjustment.certainty == HrnSectionAdjustmentCertainty::HeuristicSuggestion);
+ASSERT_TRUE(iterationBudgetAdjustment.parameter == HrnSectionParameterKey::MaxIterations);
+ASSERT_TRUE(internalError.adjustments.empty());
 ```
 
 - [ ] **Step 2: 运行失败测试，实现解析圆几何，再运行通过**
@@ -530,19 +532,19 @@ git commit -m "feat: add circular rule based layout"
 - [ ] **Step 1: 写 0/1/N Root、5 层和自动半径测试**
 
 ```cpp
-CHECK(solve(zeroRoot).locations(Pos).empty());
-CHECK(solve(singleRoot).location(Pos, root) == input.center());
-CHECK(solve(multiRoot).sideRootCenter(Pos) == input.center());
-CHECK(fiveLevels.absoluteRotation(leaf) == 75.0);
-CHECK(fiveLevels.location(leaf) == transformPoint(configuredMatrix, expectedCenter2D));
-CHECK(rotatedParent.childCenter2D() == rotate(parentRotation, childLocalOffset));
-CHECK(negativeSideUsesSameXYZBasis(result, configuredMatrix));
-CHECK_NEAR(autoResizeParent.radius(), requiredRadius, 1e-9);
-CHECK(allThreeCircleSizeModesProduceRadius(requiredRadius));
-CHECK(fixedSmallParent.reason == HrnSectionFailureReason::FixedBoundaryInsufficient);
-CHECK(leafWithAutoResize.shape().dimensions() == leafOriginalDimensions);
-CHECK(inactiveZeroRootSideRoot.shape().dimensions() == originalSideRootDimensions);
-CHECK(inactiveSingleRootSideRoot.shape().dimensions() == originalSideRootDimensions);
+ASSERT_TRUE(solve(zeroRoot).locations(Pos).empty());
+ASSERT_TRUE(solve(singleRoot).location(Pos, root) == input.center());
+ASSERT_TRUE(solve(multiRoot).sideRootCenter(Pos) == input.center());
+ASSERT_TRUE(fiveLevels.absoluteRotation(leaf) == 75.0);
+ASSERT_TRUE(fiveLevels.location(leaf) == transformPoint(configuredMatrix, expectedCenter2D));
+ASSERT_TRUE(rotatedParent.childCenter2D() == rotate(parentRotation, childLocalOffset));
+ASSERT_TRUE(negativeSideUsesSameXYZBasis(result, configuredMatrix));
+ASSERT_NEAR(autoResizeParent.radius(), requiredRadius, 1e-9);
+ASSERT_TRUE(allThreeCircleSizeModesProduceRadius(requiredRadius));
+ASSERT_TRUE(fixedSmallParent.reason == HrnSectionFailureReason::FixedBoundaryInsufficient);
+ASSERT_TRUE(leafWithAutoResize.shape().dimensions() == leafOriginalDimensions);
+ASSERT_TRUE(inactiveZeroRootSideRoot.shape().dimensions() == originalSideRootDimensions);
+ASSERT_TRUE(inactiveSingleRootSideRoot.shape().dimensions() == originalSideRootDimensions);
 ```
 
 - [ ] **Step 2: 运行失败测试，实现两遍层级求解，再运行通过**
@@ -573,22 +575,22 @@ git commit -m "feat: solve circular section hierarchies"
 - [ ] **Step 1: 写普通映射、显式映射、冲突和回滚测试**
 
 ```cpp
-CHECK(solve(ordinaryRelation).location(Pos, p) != solve(ordinaryRelation).location(Neg, n));
-CHECK(solve(samePositionRelation).location(Pos, p) == solve(samePositionRelation).location(Neg, n));
-CHECK(buildGroups({p1EqualsN1, p2EqualsN1})[0].members == stableOrder({p1, p2, n1}));
-CHECK(conflictingCase.reason == HrnSectionFailureReason::SamePositionConstraintConflict);
-CHECK(snapshot(pointAfterFailedEdit) == snapshot(pointBeforeEdit));
-CHECK(budgetFailure.reason == HrnSectionFailureReason::IterationBudgetExceeded);
-CHECK(nonConvergent.reason == HrnSectionFailureReason::NonConvergent);
-CHECK(finalRecheckFailure.reason == HrnSectionFailureReason::GeometryValidationFailed);
-CHECK(point.replacePositionTransform(mirrorMatrix).reason == HrnSectionFailureReason::InvalidInput);
-CHECK(snapshot(pointAfterInvalidMatrix) == snapshot(pointBeforeInvalidMatrix));
-CHECK(replaceInactiveRootResult.committed && inactiveRootParametersPreservedExceptReplacement(point));
-CHECK(reorderResult.committed && triplesRemainAligned(point, Pos));
-CHECK(point.findSectionIndex(Pos, targetFromOldIndex, resolvedIndex) && point.segmentAt(Pos, resolvedIndex) == &targetFromOldIndex);
-CHECK(moveResult.committed && segmentIsOnlyOnTargetSide(point, movedSegment));
-CHECK(wrongLocationCount.reason == HrnSectionFailureReason::InternalError);
-CHECK(diagnosticsAreOrderedByStageSideDepthAndStableOrder(result.diagnostics));
+ASSERT_TRUE(solve(ordinaryRelation).location(Pos, p) != solve(ordinaryRelation).location(Neg, n));
+ASSERT_TRUE(solve(samePositionRelation).location(Pos, p) == solve(samePositionRelation).location(Neg, n));
+ASSERT_TRUE(buildGroups({p1EqualsN1, p2EqualsN1})[0].members == stableOrder({p1, p2, n1}));
+ASSERT_TRUE(conflictingCase.reason == HrnSectionFailureReason::SamePositionConstraintConflict);
+ASSERT_TRUE(snapshot(pointAfterFailedEdit) == snapshot(pointBeforeEdit));
+ASSERT_TRUE(budgetFailure.reason == HrnSectionFailureReason::IterationBudgetExceeded);
+ASSERT_TRUE(nonConvergent.reason == HrnSectionFailureReason::NonConvergent);
+ASSERT_TRUE(finalRecheckFailure.reason == HrnSectionFailureReason::GeometryValidationFailed);
+ASSERT_TRUE(point.replacePositionTransform(mirrorMatrix).reason == HrnSectionFailureReason::InvalidInput);
+ASSERT_TRUE(snapshot(pointAfterInvalidMatrix) == snapshot(pointBeforeInvalidMatrix));
+ASSERT_TRUE(replaceInactiveRootResult.committed && inactiveRootParametersPreservedExceptReplacement(point));
+ASSERT_TRUE(reorderResult.committed && triplesRemainAligned(point, Pos));
+ASSERT_TRUE(point.findSectionIndex(Pos, targetFromOldIndex, resolvedIndex) && point.segmentAt(Pos, resolvedIndex) == &targetFromOldIndex);
+ASSERT_TRUE(moveResult.committed && segmentIsOnlyOnTargetSide(point, movedSegment));
+ASSERT_TRUE(wrongLocationCount.reason == HrnSectionFailureReason::InternalError);
+ASSERT_TRUE(diagnosticsAreOrderedByStageSideDepthAndStableOrder(result.diagnostics));
 ```
 
 - [ ] **Step 2: 运行失败测试，实现联合组和原子事务，再运行通过**
@@ -677,13 +679,13 @@ git commit -m "test: pass stage two circular layout gate"
 - [ ] **Step 1: 写非法轴、旋转包围盒、包含和见证点测试**
 
 ```cpp
-CHECK(HrnEllipticalSectionShape::create(2.0, 3.0, 1e-6).get() == 0);
-CHECK_NEAR(ellipse90.bounds().halfWidth(), 2.0, 1e-9);
-CHECK(!geometry.containsWithClearance(parentCircle, rotatedEllipse, 0.5).contained);
-CHECK(distanceResult.has_lhs_witness && distanceResult.has_rhs_witness);
-CHECK(repeatGjkResult(100).isBitwiseStable());
-CHECK(intervalBounds.upper - intervalBounds.lower <= modelingTolerance);
-CHECK(gjkBudgetFailure.reason == HrnSectionFailureReason::IterationBudgetExceeded);
+ASSERT_TRUE(HrnEllipticalSectionShape::create(2.0, 3.0, 1e-6).get() == 0);
+ASSERT_NEAR(ellipse90.bounds().halfWidth(), 2.0, 1e-9);
+ASSERT_TRUE(!geometry.containsWithClearance(parentCircle, rotatedEllipse, 0.5).contained);
+ASSERT_TRUE(distanceResult.has_lhs_witness && distanceResult.has_rhs_witness);
+ASSERT_TRUE(repeatGjkResult(100).isBitwiseStable());
+ASSERT_TRUE(intervalBounds.upper - intervalBounds.lower <= modelingTolerance);
+ASSERT_TRUE(gjkBudgetFailure.reason == HrnSectionFailureReason::IterationBudgetExceeded);
 ```
 
 - [ ] **Step 2: 运行失败测试，实现椭圆几何，再运行通过并提交**
@@ -712,10 +714,10 @@ git commit -m "feat: add elliptical section geometry"
 - [ ] **Step 1: 写非法边、旋转角点、相交和包围盒假阳性测试**
 
 ```cpp
-CHECK(HrnRectangularSectionShape::create(2.0, 3.0, 1e-6).get() == 0);
-CHECK(rotatedRectangle.contour().vertices.size() == 4);
-CHECK(broadPhaseOverlaps && !exactGeometry.intersects(rectangle, ellipse));
-CHECK(boundsInsideParentBounds && !exactGeometry.containsWithClearance(parentEllipse, rectangle, 0.0).contained);
+ASSERT_TRUE(HrnRectangularSectionShape::create(2.0, 3.0, 1e-6).get() == 0);
+ASSERT_TRUE(rotatedRectangle.contour().vertices.size() == 4);
+ASSERT_TRUE(broadPhaseOverlaps && !exactGeometry.intersects(rectangle, ellipse));
+ASSERT_TRUE(boundsInsideParentBounds && !exactGeometry.containsWithClearance(parentEllipse, rectangle, 0.0).contained);
 ```
 
 - [ ] **Step 2: 运行失败测试，实现矩形几何，再运行通过并提交**
@@ -741,11 +743,11 @@ git commit -m "feat: add rectangular section geometry"
 - [ ] **Step 1: 写三种模式、冻结尺寸冲突和叶子不更新测试**
 
 ```cpp
-CHECK_NEAR(keepRatio.major / keepRatio.minor, originalRatio, 1e-9);
-CHECK_NEAR(keepSmallest.minor, originalMinor, 1e-9);
-CHECK_NEAR(keepGreatest.major, originalMajor, 1e-9);
-CHECK(frozenConflict.reason == HrnSectionFailureReason::SizeUpdateConstraintConflict);
-CHECK(leafResult.dimensions == leafOriginalDimensions);
+ASSERT_NEAR(keepRatio.major / keepRatio.minor, originalRatio, 1e-9);
+ASSERT_NEAR(keepSmallest.minor, originalMinor, 1e-9);
+ASSERT_NEAR(keepGreatest.major, originalMajor, 1e-9);
+ASSERT_TRUE(frozenConflict.reason == HrnSectionFailureReason::SizeUpdateConstraintConflict);
+ASSERT_TRUE(leafResult.dimensions == leafOriginalDimensions);
 ```
 
 - [ ] **Step 2: 运行失败测试，实现确定性尺寸反求，再运行通过**
@@ -775,14 +777,14 @@ git commit -m "feat: add parent section size modes"
 - [ ] **Step 1: 写混合形状、旋转、外接圆假阳性和稳定性测试**
 
 ```cpp
-CHECK(solve(circleParentWithEllipseAndRectangle).succeeded);
-CHECK(allExactConstraintsPass(result));
-CHECK(rejectedProxyCandidateCount(result) > 0);
-CHECK(candidateTrace(result) == expectedStableAnchorPairAndBranchOrder);
-CHECK(repeat(result, 100).allCentersAndIterationsEqual());
-CHECK(noCandidate.reason == HrnSectionFailureReason::NoSolutionFound);
-CHECK(exhaustedBudget.reason == HrnSectionFailureReason::IterationBudgetExceeded);
-CHECK(proxyAcceptedButExactRejected.continuesToNextCandidate);
+ASSERT_TRUE(solve(circleParentWithEllipseAndRectangle).succeeded);
+ASSERT_TRUE(allExactConstraintsPass(result));
+ASSERT_TRUE(rejectedProxyCandidateCount(result) > 0);
+ASSERT_TRUE(candidateTrace(result) == expectedStableAnchorPairAndBranchOrder);
+ASSERT_TRUE(repeat(result, 100).allCentersAndIterationsEqual());
+ASSERT_TRUE(noCandidate.reason == HrnSectionFailureReason::NoSolutionFound);
+ASSERT_TRUE(exhaustedBudget.reason == HrnSectionFailureReason::IterationBudgetExceeded);
+ASSERT_TRUE(proxyAcceptedButExactRejected.continuesToNextCandidate);
 ```
 
 - [ ] **Step 2: 运行失败测试，实现代理候选加真实复检，再运行通过**
