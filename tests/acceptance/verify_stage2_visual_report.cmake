@@ -40,6 +40,51 @@ file(READ "${roots_1_n}" roots_1_n_html)
 file(READ "${roots_n_1}" roots_n_1_html)
 file(READ "${roots_n_n}" roots_n_n_html)
 file(READ "${matrix_index}" matrix_index_html)
+function(assert_case_topology case_name html_variable expected_positive_roots
+    expected_negative_roots expected_positive_members expected_negative_members)
+  set(report_html "${${html_variable}}")
+  string(REGEX MATCHALL
+    "class=\"tree-node\" data-node=\"p[0-9]+\"[^>]*style=\"--depth:0\""
+    positive_roots "${report_html}")
+  string(REGEX MATCHALL
+    "class=\"tree-node\" data-node=\"n[0-9]+\"[^>]*style=\"--depth:0\""
+    negative_roots "${report_html}")
+  string(REGEX MATCHALL "class=\"tree-node\" data-node=\"p[0-9]+\""
+    positive_members "${report_html}")
+  string(REGEX MATCHALL "class=\"tree-node\" data-node=\"n[0-9]+\""
+    negative_members "${report_html}")
+  string(REGEX MATCHALL "class=\"section-circle\" data-node=\"p[0-9]+\""
+    positive_circles "${report_html}")
+  string(REGEX MATCHALL "class=\"section-circle\" data-node=\"n[0-9]+\""
+    negative_circles "${report_html}")
+  list(LENGTH positive_roots actual_positive_roots)
+  list(LENGTH negative_roots actual_negative_roots)
+  list(LENGTH positive_members actual_positive_members)
+  list(LENGTH negative_members actual_negative_members)
+  list(LENGTH positive_circles actual_positive_circles)
+  list(LENGTH negative_circles actual_negative_circles)
+  if(NOT actual_positive_roots EQUAL expected_positive_roots OR
+      NOT actual_negative_roots EQUAL expected_negative_roots OR
+      NOT actual_positive_members EQUAL expected_positive_members OR
+      NOT actual_negative_members EQUAL expected_negative_members)
+    message(FATAL_ERROR
+      "${case_name} topology mismatch: roots ${actual_positive_roots} x ${actual_negative_roots}, members ${actual_positive_members} x ${actual_negative_members}")
+  endif()
+  if(NOT actual_positive_circles EQUAL expected_positive_members OR
+      NOT actual_negative_circles EQUAL expected_negative_members)
+    message(FATAL_ERROR
+      "${case_name} circle mismatch: ${actual_positive_circles} x ${actual_negative_circles}")
+  endif()
+endfunction()
+assert_case_topology("0 x 0" roots_0_0_html 0 0 0 0)
+assert_case_topology("0 x 1" roots_0_1_html 0 1 0 1)
+assert_case_topology("1 x 0" roots_1_0_html 1 0 1 0)
+assert_case_topology("0 x N" roots_0_n_html 0 2 0 3)
+assert_case_topology("N x 0" roots_n_0_html 2 0 3 0)
+assert_case_topology("1 x 1" roots_1_1_html 1 1 2 3)
+assert_case_topology("1 x N" roots_1_n_html 1 2 1 3)
+assert_case_topology("N x 1" roots_n_1_html 2 1 3 1)
+assert_case_topology("N x N" roots_n_n_html 3 3 6 5)
 foreach(empty_side_html IN ITEMS "${roots_0_0_html}" "${roots_0_1_html}" "${roots_1_0_html}"
     "${roots_0_n_html}" "${roots_n_0_html}")
   string(FIND "${empty_side_html}" "排布成功" index)
