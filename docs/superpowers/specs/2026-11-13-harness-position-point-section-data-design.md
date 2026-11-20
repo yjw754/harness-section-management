@@ -229,7 +229,7 @@ Position Point 某侧顶层 Section
 - 与 Segment Section 使用相同的 `HrnSectionData` 类型，由本侧 `m_pos_root_section` 或 `m_neg_root_section` 独占持有；
 - 正负两侧分别判断是否参与计算，互不影响。
 
-当某侧只有一个 Root Segment 时，唯一 Root Segment 对应的 Section 是本侧有效根截面，其 Location 强制等于 Position Point 的 `center()`；侧级 Root Section 保留但不参与形状、旋转、Layout 或 Location 计算。
+当某侧只有一个 Root Segment 时，唯一 Root Segment 对应的 Section 是本侧有效根截面，其 Location 锚定在 Position Point 的 `center()`（Stage 2 的单截面跟随例外见 6.4.1）；侧级 Root Section 保留但不参与形状、旋转、Layout 或 Location 计算。
 
 当某侧没有 Root Segment 时，本侧没有有效根截面，侧级 Root Section 同样保留但完全忽略。只有多个 Root Segment 时，侧级 Root Section 的中心固定为 `center()`，其 Shape、Rotation 和 Layout 才参与本侧计算。
 
@@ -375,7 +375,7 @@ classDiagram
     HrnParentSizeSolver ..> HrnSectionShape : creates resized candidate
     HrnParentSizeSolver ..> HrnSectionGeometryService : validates candidate
 
-    note for HrnPositionPoint "m_position_transform is the only position/orientation source; its translation is center(); each side has segments.size == locations.size == sections.size; each side always owns one root_section; root_section participates only when Root count > 1; a single Root Segment is anchored at center(); every Section belongs to exactly one side and one ordinary or root role"
+    note for HrnPositionPoint "m_position_transform is the only position/orientation source; its translation is center(); each side has segments.size == locations.size == sections.size; each side always owns one root_section; root_section participates only when Root count > 1; a single Root Segment is anchored at center() except for the Stage 2 singleton-follow case in 6.4.1; every Section belongs to exactly one side and one ordinary or root role"
 ```
 
 关系说明：
@@ -795,11 +795,15 @@ location_3d = m_position_transform * (x, y, 0, 1)
 
 同位置约束不能在正、负两侧分别完成 Layout 后仅做最终相等校验。求解器必须先把全部显式同位置约束构造成无向约束图；同一连通分量内的 Segment 形成一个同位置等价类，并共享一个 Position Point 二维基准下的中心变量。一个 Segment 同时参与多条显式约束时，等价类中的全部 Segment 都必须具有同一最终二维中心。
 
+**映射导致的同侧重叠：** 同一同位置等价类内的同侧兄弟 Section 允许同心重叠，不检查它们彼此之间的间距或干涉；同一父级下的同类成员按最大半径形成单个圆形占位参与初始排布，随后保留每个成员各自的身份、半径和子树。此规则适用于侧级 Root 下的顶层成员及嵌套父级下的兄弟成员，也适用于多条映射的传递闭包。普通对应不授予重叠许可。不同等价类之间的间距、干涉检查，以及所有父子包含和父边界间距要求仍然有效。
+
+**Stage 2 单截面跟随例外：** 若一侧有至少两个顶层 Segment，另一侧总共只有一个 Segment，且整个 Position Point 恰有一条显式同位置边，则复用多顶层侧映射端点的规则排布中心；只移动单截面侧的成员，不为匹配而重新排布多顶层侧。普通对应不计入显式边数量。侧级 Root 的启用条件及中心不变，仍需通过包含、间距、无干涉和同位置校验；其他拓扑或多条显式边沿用原锚定规则。
+
 每个等价类以及其成员到两侧有效 Root Section 的全部祖先链组成一个 `HrnCoupledSolveGroup`。组内包含两侧相关父 Section 的 Layout、父边界尺寸和共享中心变量，并在同一个事务临时状态中联合迭代：
 
 1. 所有中心变量统一使用 Position Point 二维基准表示；每个父 Layout 通过父 Section 的累积变换把共享中心投影到自己的局部坐标系，不创建两份可独立漂移的同位置坐标；
 2. 每轮迭代从同一个不可变的第 `k` 轮组状态读取输入，分别生成各父 Layout 的确定性候选和尺寸候选，再统一解算共享中心并原子生成第 `k+1` 轮组状态，禁止因正侧或负侧先执行而改变结果；
-3. 共享中心必须同时满足等价类涉及的全部父边界包含、兄弟间距和无干涉约束。不得用两个独立候选中心的平均值代替约束求解；
+3. 共享中心必须同时满足等价类涉及的全部父边界包含，以及不同等价类兄弟之间的间距和无干涉约束；同类兄弟按上述同侧重叠规则豁免。不得用两个独立候选中心的平均值代替约束求解；
 4. 组内每个 Layout 继续使用自己的 `algorithm_version`、候选规则和迭代计数。任一参与 Layout 达到自身 `max_iterations` 时，整个组以 `IterationBudgetExceeded` 失败；共享变量采用参与 Layout 中最小的 `convergence_tolerance`，并且全部局部 Layout 都达到各自收敛条件后，组才算收敛；
 5. 组状态包含全部共享与非共享中心、全部参与父 Shape 尺寸。只有组内真实几何校验和同位置相等校验全部通过，才允许把该组标记为成功；
 6. 约束等价类、祖先闭包、组内 Section 顺序和失败诊断顺序都按 Side、Segment 稳定身份及层级确定，不依赖线程调度；
@@ -863,7 +867,7 @@ Root Segment 由既有 Segment 拓扑和当前侧 Segment 容器共同判定，�
 正负两侧分别计算 Root 数量：
 
 - 0 个：无有效根截面，保留但忽略侧级 Root Section；
-- 1 个：使用该 Segment 的 Section，并强制其 Location 等于 `center()`，即 `m_position_transform` 的平移分量；保留但忽略侧级 Root Section；
+- 1 个：使用该 Segment 的 Section，Location 锚定在 `center()`（单截面跟随例外见 6.4.1）；保留但忽略侧级 Root Section；
 - 多个：使用对应侧的可编辑 Root Section，其中心固定为 `center()`。
 
 侧级 Root Section 始终存在，但不能反向改变 Segment Root 判定。
@@ -892,7 +896,7 @@ Segment 容器是单侧条目身份和顺序的权威数据。Position Point 在
 5. 接纳对象所有权前以及事务提交前，检查 `m_pos_sections`、`m_neg_sections`、`m_pos_root_section` 和 `m_neg_root_section` 中所有 Section 对象身份互不重复，并检查各 Section 独占的 Shape、Layout 对象身份互不重复；发现共享对象时拒绝接纳或提交；
 6. 正、负两侧 Root Section 成员始终非空；仅在本侧 Root Segment 数量大于一个时参与计算；
 7. `m_position_transform` 是元素有限、轴单位正交、行列式为 `+1`、最后一行合法的右手齐次刚体变换；
-8. 单 Root 场景中唯一 Root Segment 的 Location 等于 `center()`，多 Root 场景中侧级 Root Section 的隐式中心等于 `center()`；
+8. 单 Root 场景中唯一 Root Segment 的 Location 等于 `center()`（单截面跟随例外见 6.4.1），多 Root 场景中侧级 Root Section 的隐式中心等于 `center()`；
 9. 所有旋转角已规范化到 `[0°, 360°)`，自动尺寸更新开关值合法，所有尺寸更新模式属于已定义枚举值，所有 Layout 间距容差非负；
 10. 每个 Layout 的算法版本有效、`max_iterations > 0` 且 `convergence_tolerance > 0`；
 11. 叶子 Section 的 Shape 尺寸未被自动更新；其他 Section 在关闭自动尺寸更新时 Shape 尺寸未被求解器修改，开启时更新后的 Shape 参数满足长短尺寸约束，且冻结尺寸未被所选更新模式非法修改；
@@ -1145,7 +1149,7 @@ CATIA V5 的参考价值主要在于：
 7. Section 组合多态 Shape 和多态 Layout，外边界与“本 Section 内直接子成员”的排布策略解耦。
 8. Segment Section 的三维中心位置继续由本侧 Location 容器保存。
 9. 每侧 Root Section 始终存在并保留参数，仅多 Root 场景参与计算；0 Root 或单 Root 时忽略。
-10. 多 Root 场景的 Root Section 固定以 Position Point 三维矩阵的平移分量为中心；单 Root 场景唯一 Root Segment 的 Location 同样固定为该中心。
+10. 多 Root 场景的 Root Section 固定以 Position Point 三维矩阵的平移分量为中心；单 Root 场景唯一 Root Segment 的 Location 同样锚定该中心，单截面跟随例外见 6.4.1。
 11. 单 Root 场景直接使用 Root Segment 对应的 Section，不累积未启用的侧级 Root Section 参数。
 12. `HrnSectionData` 使用 `HrnSectionOptions` 构造，避免布尔开关、枚举和角度之间的静默位置参数转换。
 13. Section 保存相对于直接父 Section 局部二维坐标系的局部旋转角，默认 `0°`，真实旋转沿父链累积；该角度是用户输入，任何 Layout 都不得改写。

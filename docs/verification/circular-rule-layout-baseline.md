@@ -6,4 +6,13 @@ Algorithm version 1: stable descending radius order; first center at `(0,0)`, se
 
 Seven frozen cases are in `tests/fixtures/circular_rule_layout_cases.h`. They cover 1, 2, 3, and 6 equal circles; unsorted radii; spacing 0.5; and six varied radii. Expected centers, parent radii, candidate counts, and iteration counts are asserted within `1e-9` for floating values.
 
+Constrained extension (2026-11-19): a request may supply `fixed_placements` and a
+`parent_radius_limit`. Fixed circles retain their coordinates and form initial
+obstacles; only free members consume placement iterations. The same tangent
+candidate enumeration also considers the parent origin and all eight single-circle
+directions when fixed circles are present. Candidates outside the fixed boundary
+are filtered during search. Equal enclosing-radius scores prefer positions closer
+to the parent origin; remaining ties preserve enumeration order. These additions
+apply to constrained requests; all seven unconstrained vectors remain unchanged.
+
 Compiler: GNU C++ 13.3.0, C++14. Source revision: this branch's Task 8 commit. Product integration path and product baseline commit remain unresolved in `product-integration-profile.md`.

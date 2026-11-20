@@ -228,4 +228,3 @@ Update `docs/verification/stage2-visual-report.md` with the current CTest and br
 git add docs/verification/stage2-visual-report.md
 git commit -m "docs: verify asymmetric same-position case matrix"
 ```
-

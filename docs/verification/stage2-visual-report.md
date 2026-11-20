@@ -19,9 +19,13 @@ reports covering `0 × 0`, `0 × 1`, `1 × 0`, `0 × N`, `N × 0`, `1 × 1`,
 
 The new bilateral cases use same-position relations only. They cover one-to-one,
 one-to-many, many-to-one, and an `N × N` mixture of all three. In repeated-endpoint
-groups, Sections forced to one center on the same side form a decreasing-radius
-ancestor-descendant chain, so the circles are contained rather than overlapping
-siblings. Empty-side combinations contain no relation because a relation requires
+groups in the original matrix, Sections forced to one center on the same side form
+a decreasing-radius ancestor-descendant chain. Additional `stage2-overlap-2-1.html`
+and `stage2-overlap-1-2.html` reports show intentional overlap between same-side
+top-level siblings connected through cross-side same-position mappings. The index
+links both reports. Only members of the same explicit mapping component share an
+overlap exemption; other clearance and containment rules still apply.
+Empty-side combinations contain no relation because a relation requires
 one endpoint on each side. Positive and negative trees deliberately use different
 depths and parent groupings.
 
@@ -41,11 +45,13 @@ both endpoint details. Use the diagram's plus, minus, and fit buttons to change 
 
 The successful example has five nested positive sections, three negative sections,
 one other positive root, ordinary mapping relations, and one feasible same-position
-relation. The conflict example uses the same topology and all four original Stage 1
-mapping relations. Both examples use the Stage 2 algorithm version 1 and enable
-member auto-resize. The second equal-center edge is incompatible with the nested
-topology, so the failed report shows diagnostics without circles. The Stage 1
-fixture itself is unchanged.
+relation. The failure example retains the same topology and four mapping relations,
+but fixes P4's radius at 1 while its P5 child has radius 2 and requires clearance
+0.2. It reports `FixedBoundaryInsufficient` / `OutsideParent` without circles.
+The formerly rejected second shared-center edge is now supported. Other members
+use auto-resize and both examples use Stage 2 algorithm version 1. The legacy
+failure filename remains `stage1-mapping-conflict.html`; the Stage 1 fixture itself
+is unchanged.
 
 The report API is `buildVisualReportModel` and `renderVisualReportHtml` in
 `demo/HrnSectionVisualReport.h`; pass any Position Point candidate, relation list,

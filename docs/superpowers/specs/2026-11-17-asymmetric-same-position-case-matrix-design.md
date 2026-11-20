@@ -54,4 +54,3 @@ The existing successful, conflict, nested-pair, single-pair, and two-parent repo
 - Assert that the one-to-many, many-to-one, and mixed reports contain the intended repeated endpoint labels.
 - Add a browser check that opens the index, follows a mixed-case link, selects a mapping row, and observes both endpoint details without JavaScript errors.
 - Run the Stage 2 CTest suite and the real-browser regression suite, then regenerate the review HTML in the repository build output.
-
