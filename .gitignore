@@ -2,3 +2,4 @@
 .codex/
 .superpowers/
 build*/
+__pycache__/

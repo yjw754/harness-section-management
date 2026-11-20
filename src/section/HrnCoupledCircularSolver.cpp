@@ -1,4 +1,5 @@
 #include "hrn/section/HrnPositionPointSolver.h"
+#include "HrnSamePositionClasses.h"
 
 #include <algorithm>
 #include <cmath>
@@ -8,10 +9,11 @@
 #include <vector>
 
 #include "hrn/section/HrnSectionGeometryService.h"
+#include "hrn/section/HrnRuleBasedLayoutSolver.h"
 
 namespace hrn {
 namespace {
-const double kTolerance = 1e-9;
+const double kTolerance = kHrnCircularModelingTolerance;
 struct NodeRef { int side; size_t index; };
 struct Tree {
   std::vector<int> parent;
@@ -92,13 +94,6 @@ Tree makeTree(const HrnCircularSolvedSide& side) {
   }
   return tree;
 }
-size_t find(std::vector<size_t>& leaders, size_t value) {
-  while (leaders[value] != value) {
-    leaders[value] = leaders[leaders[value]];
-    value = leaders[value];
-  }
-  return value;
-}
 void shift(HrnCircularHierarchyResult& result, const Tree& tree, NodeRef ref,
            Point2D delta) {
   HrnCircularSolvedSide& side = result.sides[ref.side];
@@ -109,41 +104,133 @@ void shift(HrnCircularHierarchyResult& result, const Tree& tree, NodeRef ref,
 bool same(Point2D a, Point2D b) {
   return std::hypot(a.x - b.x, a.y - b.y) <= kTolerance;
 }
+Point2D rotate(Point2D point, double degrees) {
+  const double angle = degrees * 3.14159265358979323846 / 180;
+  const double c = std::cos(angle), s = std::sin(angle);
+  return {c * point.x - s * point.y, s * point.x + c * point.y};
+}
+
+// Rebuild a whole free family around the mapped obstacles. Keep the old
+// geometry until every free envelope has a valid candidate.
+bool repackFreeSiblings(HrnCircularHierarchyResult& result, int side_index,
+                        const Tree& tree, const std::vector<size_t>& children,
+                        const HrnSamePositionClasses& classes) {
+  auto& side = result.sides[side_index];
+  const auto side_name = side_index == 0 ? ZeHrnSide::Positive : ZeHrnSide::Negative;
+  const int parent = tree.parent[children.front()];
+  const auto& container = parent == -1 ? *side.root : *side.sections[parent];
+  const Point2D parent_center = parent == -1 ? Point2D{0, 0} : side.centers2d[parent];
+  const double angle = parent == -1 ? side.reference_root_rotation : side.absolute_rotations[parent];
+  HrnCircularLayoutRequest request;
+  request.spacing = container.layout().spacingTolerance();
+  request.settings = container.layout().solveSettings();
+  if (!container.autoResizeEnabled())
+    request.parent_radius_limit = container.shape().dimensions().primary;
+  std::map<size_t, std::vector<size_t>> members;
+  std::vector<size_t> group_order;
+  for (size_t child : children) {
+    const size_t group = classes.group(side_name, child);
+    if (members[group].empty()) group_order.push_back(group);
+    members[group].push_back(child);
+  }
+  std::vector<HrnCircle2D> old_circles;
+  double old_envelope = 0, old_compactness = 0;
+  for (size_t group : group_order) {
+    size_t representative = members[group].front();
+    for (size_t child : members[group])
+      if (radiusOf(result, {side_index, child}) > radiusOf(result, {side_index, representative}))
+        representative = child;
+    const auto center = side.centers2d[representative];
+    const auto local = rotate({center.x - parent_center.x, center.y - parent_center.y}, -angle);
+    const double radius = radiusOf(result, {side_index, representative});
+    old_circles.push_back({local, radius});
+    old_envelope = std::max(old_envelope, std::hypot(local.x, local.y) + radius + request.spacing);
+    old_compactness += local.x * local.x + local.y * local.y;
+    if (tree.pinned_subtree[representative])
+      request.fixed_placements.push_back({representative, radius, local});
+    else request.members.push_back({representative, radius});
+  }
+  if (request.fixed_placements.empty() || request.members.empty()) return false;
+  const auto placed = HrnCircularRuleBasedLayoutSolver().solve(request);
+  side.candidate_count += placed.candidate_count;
+  side.iterations_used += placed.iterations_used;
+  if (!placed.succeeded) return false;
+  const HrnCircularGeometryService geometry;
+  bool old_valid = old_envelope <= request.parent_radius_limit + kTolerance;
+  for (size_t i = 0; old_valid && i < old_circles.size(); ++i)
+    for (size_t j = i + 1; j < old_circles.size(); ++j) {
+      const auto distance = geometry.signedDistance(old_circles[i], old_circles[j], kTolerance);
+      if (!distance.valid || distance.signed_distance + kTolerance < request.spacing) old_valid = false;
+    }
+  double compactness = 0;
+  for (const auto& placement : placed.placements)
+    compactness += placement.center.x * placement.center.x + placement.center.y * placement.center.y;
+  if (old_valid && (placed.required_parent_radius > old_envelope + kTolerance ||
+      (placed.required_parent_radius >= old_envelope - kTolerance &&
+       compactness >= old_compactness - kTolerance))) return false;
+  for (const auto& placement : placed.placements) {
+    if (tree.pinned_subtree[placement.id]) continue;
+    const auto offset = rotate(placement.center, angle);
+    const Point2D target{parent_center.x + offset.x, parent_center.y + offset.y};
+    for (size_t child : members.at(classes.group(side_name, placement.id))) {
+      const auto current = side.centers2d[child];
+      shift(result, tree, {side_index, child}, {target.x - current.x, target.y - current.y});
+    }
+  }
+  return true;
+}
+
+// Propose a parent-only move. The direct children keep their absolute
+// centers; their enclosing circle is independent of the old parent center.
+bool recenteredParent(const HrnCircularSolvedSide& side, const Tree& tree,
+                      size_t node, const HrnCircularGeometryService& geometry,
+                      HrnCircle2D& proposal) {
+  const auto& section = *side.sections[node];
+  const double spacing = section.layout().spacingTolerance();
+  std::vector<HrnCircle2D> children;
+  for (size_t child : tree.children[node])
+    children.push_back({side.centers2d[child],
+                        side.sections[child]->shape().dimensions().primary});
+  const auto enclosure = geometry.minimumEnclosingCircle(children, kTolerance);
+  if (!enclosure.valid) return false;
+  const double required = enclosure.circle.radius + spacing;
+  if (!std::isfinite(required)) return false;
+  proposal = {enclosure.circle.center, section.autoResizeEnabled() ? required :
+      section.shape().dimensions().primary};
+  if (proposal.radius + kTolerance < required) return false;
+  const int parent = tree.parent[node];
+  const auto& container = parent == -1 ? *side.root : *side.sections[parent];
+  const auto center = parent == -1 ? Point2D{0, 0} : side.centers2d[parent];
+  if (container.autoResizeEnabled()) return true;
+  return geometry.containsWithClearance({center, container.shape().dimensions().primary},
+      proposal, container.layout().spacingTolerance(), kTolerance).contained;
+}
 }  // namespace
 
 bool enforceCoupledCircular(const HrnPositionPointInput& input,
-                            const std::vector<HrnSegmentSideRelation>& relations,
-                            HrnCircularHierarchyResult& result) {
+                            const HrnSamePositionClasses& classes,
+                            HrnCircularHierarchyResult& result, bool prefer_negative_seed,
+                            const HrnCircularRotationBaseline* rotation) {
   const size_t positive_count = result.sides[0].segments.size();
   const size_t negative_count = result.sides[1].segments.size();
   const size_t total = positive_count + negative_count;
-  std::vector<size_t> leaders(total);
-  for (size_t i = 0; i < total; ++i) leaders[i] = i;
-  std::map<const HrnSegment*, size_t> index[2];
-  for (size_t i = 0; i < positive_count; ++i) index[0][result.sides[0].segments[i]] = i;
-  for (size_t i = 0; i < negative_count; ++i) index[1][result.sides[1].segments[i]] = i;
-  bool coupled = false;
-  for (const auto& relation : relations) {
-    if (!relation.valid() || index[0].count(relation.positive) == 0 ||
-        index[1].count(relation.negative) == 0) {
-      fail(result, HrnSectionTarget::positionPoint(), HrnSectionFailureReason::InvalidInput,
-           HrnSectionFailureStage::InputValidation);
-      return false;
-    }
-    if (!relation.same_position) continue;
-    coupled = true;
-    const size_t a = find(leaders, index[0][relation.positive]);
-    const size_t b = find(leaders, positive_count + index[1][relation.negative]);
-    if (a != b) leaders[b] = a;
-  }
-  if (!coupled) return true;
+  if (classes.edgeCount() == 0 && !rotation) return true;
   Tree trees[2] = {makeTree(result.sides[0]), makeTree(result.sides[1])};
+  const std::vector<Point2D> seed_centers[2] = {result.sides[0].centers2d, result.sides[1].centers2d};
+  // A singleton without descendants can follow the only explicit link to a
+  // multi-root side without changing either side's containment constraints.
+  int following_side = -1;
+  if (classes.edgeCount() == 1) {
+    if (positive_count == 1 && trees[1].roots.size() > 1) following_side = 0;
+    if (negative_count == 1 && trees[0].roots.size() > 1) following_side = 1;
+  }
+  const auto anchoredAtOrigin = [&](NodeRef ref) {
+    return ref.side != following_side && trees[ref.side].roots.size() == 1 &&
+        trees[ref.side].parent[ref.index] == -1;
+  };
   std::map<size_t, std::vector<NodeRef>> groups;
   for (size_t i = 0; i < total; ++i) {
-    const size_t leader = find(leaders, i);
-    if (leader == i &&
-        ((i < positive_count && index[0].empty()) ||
-         (i >= positive_count && index[1].empty()))) continue;
+    const size_t leader = classes.group(i);
     groups[leader].push_back(i < positive_count ? NodeRef{0, i} :
         NodeRef{1, i - positive_count});
   }
@@ -151,16 +238,43 @@ bool enforceCoupledCircular(const HrnPositionPointInput& input,
     if (it->second.size() < 2) it = groups.erase(it);
     else ++it;
   }
-  // A shared center is chosen once per connected component. A lone side root
-  // anchors its component at the Position Point origin.
+  // The eligible singleton uses its peer's rule-based center. Other lone
+  // roots stay anchored and force their component to the Position Point origin.
   std::map<size_t, Point2D> shared;
+  std::vector<bool> directly_mapped(total, false);
+  const auto globalIndex = [positive_count](NodeRef ref) {
+    return ref.side == 0 ? ref.index : positive_count + ref.index;
+  };
   for (const auto& group : groups) {
-    Point2D target = centerOf(result, group.second.front());
-    for (NodeRef ref : group.second)
-      if (trees[ref.side].roots.size() == 1 &&
-          trees[ref.side].parent[ref.index] == -1) target = {0, 0};
+    Point2D target = centerOf(result, prefer_negative_seed ?
+        group.second.back() : group.second.front());
+    if (rotation) {
+      const NodeRef* driver = nullptr;
+      for (const auto& ref : group.second) {
+        if (same(centerOf(result, ref), rotation->sides[ref.side].centers[ref.index])) continue;
+        if (!driver) driver = &ref;
+        if (ref.side == (prefer_negative_seed ? 1 : 0)) {
+          driver = &ref;
+          break;
+        }
+      }
+      if (driver) target = centerOf(result, *driver);
+    }
+    for (NodeRef ref : group.second) {
+      if (anchoredAtOrigin(ref)) {
+        if (rotation && !same(target, {0, 0})) {
+          fail(result, targetOf(result, ref), HrnSectionFailureReason::SamePositionConstraintConflict,
+               HrnSectionFailureStage::LayoutSolve);
+          return false;
+        }
+        target = {0, 0};
+      }
+      else if (following_side >= 0 && ref.side != following_side)
+        target = centerOf(result, ref);
+    }
     shared[group.first] = target;
     for (NodeRef ref : group.second) {
+      directly_mapped[globalIndex(ref)] = true;
       for (int index_of_ancestor = static_cast<int>(ref.index);
            index_of_ancestor != -1;
            index_of_ancestor = trees[ref.side].parent[index_of_ancestor])
@@ -175,8 +289,7 @@ bool enforceCoupledCircular(const HrnPositionPointInput& input,
       for (NodeRef ref : group.second) {
         const Point2D current = centerOf(result, ref);
         if (same(current, target)) continue;
-        if (trees[ref.side].roots.size() == 1 &&
-            trees[ref.side].parent[ref.index] == -1) {
+        if (anchoredAtOrigin(ref)) {
           fail(result, targetOf(result, ref),
                HrnSectionFailureReason::SamePositionConstraintConflict,
                HrnSectionFailureStage::LayoutSolve);
@@ -195,8 +308,32 @@ bool enforceCoupledCircular(const HrnPositionPointInput& input,
     return false;
   }
   const HrnCircularGeometryService geometry;
+  std::vector<bool> rotation_followers(total, false);
+  if (rotation) {
+    for (const auto& group : groups) {
+      for (NodeRef ref : group.second) {
+        if (same(seed_centers[ref.side][ref.index], centerOf(result, ref))) continue;
+        const Tree& tree = trees[ref.side];
+        for (int ancestor = tree.parent[ref.index]; ancestor != -1; ancestor = tree.parent[ancestor])
+          rotation_followers[globalIndex({ref.side, static_cast<size_t>(ancestor)})] = true;
+      }
+    }
+  }
+  for (int k = 0; !rotation && k < 2; ++k) {
+    const auto repackMovedFamily = [&](const std::vector<size_t>& children) {
+      bool mapped_moved = false;
+      for (size_t child : children)
+        if (trees[k].pinned_subtree[child] &&
+            !same(seed_centers[k][child], result.sides[k].centers2d[child])) mapped_moved = true;
+      if (mapped_moved) repackFreeSiblings(result, k, trees[k], children, classes);
+    };
+    for (const auto& children : trees[k].children)
+      if (children.size() > 1) repackMovedFamily(children);
+    if (trees[k].roots.size() > 1) repackMovedFamily(trees[k].roots);
+  }
   // Jointly repair free siblings, then update and validate every parent from
-  // leaves upward. A pinned subtree cannot be moved without breaking a class.
+  // leaves upward. Translating a pinned subtree would break a class, but a
+  // parent that is not itself mapped can move around stationary children.
   size_t cycle_budget = std::numeric_limits<size_t>::max();
   for (int k = 0; k < 2; ++k) {
     const auto& side = result.sides[k];
@@ -220,19 +357,48 @@ bool enforceCoupledCircular(const HrnPositionPointInput& input,
   for (int k = 0; k < 2; ++k) {
     HrnCircularSolvedSide& side = result.sides[k];
     Tree& tree = trees[k];
-    std::vector<std::vector<size_t>> families;
-    for (const auto& children : tree.children) if (!children.empty()) families.push_back(children);
-    if (tree.roots.size() > 1) families.push_back(tree.roots);
-    for (const auto& children : families) {
+    const auto proposeRecenter = [&](NodeRef ref, HrnCircle2D& proposal) {
+      const size_t id = globalIndex(ref);
+      return !directly_mapped[id] &&
+          (!rotation || (rotation_followers[id] && side.sections[ref.index]->autoResizeEnabled())) &&
+          recenteredParent(side, tree, ref.index, geometry, proposal);
+    };
+    const auto repairFamily = [&](const std::vector<size_t>& children) {
+      if (children.empty()) return true;
+      const int parent = tree.parent[children.front()];
+      const auto& container = parent == -1 ? *side.root : *side.sections[parent];
+      const double spacing = container.layout().spacingTolerance();
+      const int peer = 1 - k;
+      bool can_repack_follower = rotation && parent == -1 && trees[peer].roots.size() > 1 &&
+          normalizeDegrees(rotation->sides[peer].root_rotation) != result.sides[peer].root->rotation();
+      if (rotation && !container.autoResizeEnabled()) {
+        const HrnCircle2D boundary{parent == -1 ? Point2D{0, 0} : side.centers2d[parent],
+                                   container.shape().dimensions().primary};
+        for (size_t child : children) {
+          const NodeRef member{k, child};
+          const auto containment = geometry.containsWithClearance(boundary,
+              {centerOf(result, member), radiusOf(result, member)}, spacing, kTolerance);
+          HrnCircle2D proposal;
+          if (!containment.valid || containment.contained || !proposeRecenter(member, proposal))
+            continue;
+          auto replacement = side.sections[child]->withCircularRadius(proposal.radius, kTolerance);
+          if (!replacement) {
+            fail(result, targetOf(result, member), HrnSectionFailureReason::InternalError,
+                 HrnSectionFailureStage::ParentSizeUpdate);
+            return false;
+          }
+          side.centers2d[child] = proposal.center;
+          side.sections[child] = std::move(replacement);
+          changed = true;
+        }
+      }
       bool clear = false;
       for (size_t pass = 0; pass < children.size() * children.size() + 1; ++pass) {
         bool moved = false;
         for (size_t a = 0; a < children.size(); ++a) {
           for (size_t b = a + 1; b < children.size(); ++b) {
             NodeRef left{k, children[a]}, right{k, children[b]};
-            const double spacing = tree.parent[children[a]] == -1 ?
-                side.root->layout().spacingTolerance() :
-                side.sections[tree.parent[children[a]]]->layout().spacingTolerance();
+            if (classes.group(globalIndex(left)) == classes.group(globalIndex(right))) continue;
             const auto distance = geometry.signedDistance(
                 {centerOf(result, left), radiusOf(result, left)},
                 {centerOf(result, right), radiusOf(result, right)}, kTolerance);
@@ -245,12 +411,65 @@ bool enforceCoupledCircular(const HrnPositionPointInput& input,
             if (distance.signed_distance + kTolerance >= spacing) continue;
             const bool left_pinned = tree.pinned_subtree[left.index];
             const bool right_pinned = tree.pinned_subtree[right.index];
-            if (left_pinned && right_pinned) {
+            if (rotation || (left_pinned && right_pinned)) {
+              {
+                const HrnCircle2D old_left{centerOf(result, left), radiusOf(result, left)};
+                const HrnCircle2D old_right{centerOf(result, right), radiusOf(result, right)};
+                HrnCircle2D new_left = old_left, new_right = old_right;
+                const bool can_move_left = proposeRecenter(left, new_left);
+                const bool can_move_right = proposeRecenter(right, new_right);
+                std::unique_ptr<HrnSectionData> replacements[2];
+                bool repaired = false;
+                for (unsigned mask : {1u, 2u, 3u}) {
+                  if (((mask & 1) && !can_move_left) || ((mask & 2) && !can_move_right)) continue;
+                  const auto& trial_left = mask & 1 ? new_left : old_left;
+                  const auto& trial_right = mask & 2 ? new_right : old_right;
+                  const auto trial = geometry.signedDistance(trial_left, trial_right, kTolerance);
+                  if (!trial.valid || trial.signed_distance + kTolerance < spacing) continue;
+                  const NodeRef nodes[] = {left, right};
+                  const HrnCircle2D circles[] = {trial_left, trial_right};
+                  for (unsigned i = 0; i < 2; ++i) {
+                    if (!(mask & (1u << i))) continue;
+                    const auto& member = side.sections[nodes[i].index];
+                    if (!member->autoResizeEnabled()) continue;
+                    replacements[i] = member->withCircularRadius(circles[i].radius, kTolerance);
+                    if (!replacements[i]) {
+                      fail(result, targetOf(result, nodes[i]), HrnSectionFailureReason::InternalError,
+                           HrnSectionFailureStage::ParentSizeUpdate);
+                      return false;
+                    }
+                  }
+                  for (unsigned i = 0; i < 2; ++i) {
+                    if (!(mask & (1u << i))) continue;
+                    side.centers2d[nodes[i].index] = circles[i].center;
+                    if (replacements[i]) side.sections[nodes[i].index] = std::move(replacements[i]);
+                  }
+                  repaired = true;
+                  break;
+                }
+                if (repaired) {
+                  moved = true;
+                  changed = true;
+                  continue;
+                }
+              }
+              const NodeRef obstacle = left_pinned ? left : right;
+              if (can_repack_follower && left_pinned != right_pinned &&
+                  (rotation_followers[globalIndex(obstacle)] ||
+                   !same(seed_centers[k][obstacle.index], centerOf(result, obstacle)))) {
+                can_repack_follower = false;
+                if (repackFreeSiblings(result, k, tree, children, classes)) {
+                  moved = true;
+                  changed = true;
+                  continue;
+                }
+              }
               fail(result, targetOf(result, left),
-                   HrnSectionFailureReason::SamePositionConstraintConflict,
+                   HrnSectionFailureReason::NoSolutionFound,
                    HrnSectionFailureStage::LayoutSolve);
               HrnSectionConflict conflict;
-              conflict.kind = HrnSectionConflictKind::SamePositionIncompatible;
+              conflict.kind = distance.signed_distance < -kTolerance ? HrnSectionConflictKind::Overlap :
+                       HrnSectionConflictKind::ClearanceInsufficient;
               conflict.lhs = targetOf(result, left);
               conflict.has_rhs = true;
               conflict.rhs = targetOf(result, right);
@@ -284,10 +503,12 @@ bool enforceCoupledCircular(const HrnPositionPointInput& input,
              HrnSectionFailureStage::LayoutSolve);
         return false;
       }
-    }
+      return true;
+    };
     std::function<bool(size_t)> update = [&](size_t node) -> bool {
       for (size_t child : tree.children[node]) if (!update(child)) return false;
       if (tree.children[node].empty()) return true;
+      if (rotation && !repairFamily(tree.children[node])) return false;
       const double spacing = side.sections[node]->layout().spacingTolerance();
       double required = 0;
       size_t limiting_child = tree.children[node].front();
@@ -308,14 +529,8 @@ bool enforceCoupledCircular(const HrnPositionPointInput& input,
         }
       }
       else if (side.sections[node]->shape().dimensions().primary + kTolerance < required) {
-        bool all_pinned = true;
-        for (size_t child : tree.children[node])
-          all_pinned = all_pinned && tree.pinned_subtree[child];
-        const bool anchored = tree.roots.size() == 1 && tree.parent[node] == -1;
         fail(result, targetOf(result, {k, node}),
-             anchored && all_pinned ?
-                 HrnSectionFailureReason::SamePositionConstraintConflict :
-                 HrnSectionFailureReason::NoSolutionFound,
+             HrnSectionFailureReason::NoSolutionFound,
              HrnSectionFailureStage::GeometryValidation);
         addBoundaryEvidence(result, targetOf(result, {k, node}),
             targetOf(result, {k, limiting_child}), side.centers2d[node],
@@ -326,8 +541,14 @@ bool enforceCoupledCircular(const HrnPositionPointInput& input,
       }
       return side.sections[node] != nullptr;
     };
+    if (!rotation) {
+      for (const auto& children : tree.children)
+        if (children.size() > 1 && !repairFamily(children)) return false;
+      if (tree.roots.size() > 1 && !repairFamily(tree.roots)) return false;
+    }
     for (size_t root : tree.roots) if (!update(root)) return false;
     if (tree.roots.size() > 1) {
+      if (rotation && !repairFamily(tree.roots)) return false;
       const double spacing = side.root->layout().spacingTolerance();
       double required = 0;
       size_t limiting_root = tree.roots.front();
@@ -348,13 +569,8 @@ bool enforceCoupledCircular(const HrnPositionPointInput& input,
         }
       }
       else if (side.root->shape().dimensions().primary + kTolerance < required) {
-        bool all_pinned = true;
-        for (size_t root : tree.roots)
-          all_pinned = all_pinned && tree.pinned_subtree[root];
         fail(result, HrnSectionTarget::sideRoot(k == 0 ? ZeHrnSide::Positive :
-             ZeHrnSide::Negative), all_pinned ?
-                 HrnSectionFailureReason::SamePositionConstraintConflict :
-                 HrnSectionFailureReason::NoSolutionFound,
+             ZeHrnSide::Negative), HrnSectionFailureReason::NoSolutionFound,
              HrnSectionFailureStage::GeometryValidation);
         addBoundaryEvidence(result, HrnSectionTarget::sideRoot(k == 0 ?
             ZeHrnSide::Positive : ZeHrnSide::Negative),
@@ -366,7 +582,7 @@ bool enforceCoupledCircular(const HrnPositionPointInput& input,
       }
     }
   }
-  if (!changed) { jointly_settled = true; break; }
+  if (rotation || !changed) { jointly_settled = true; break; }
   }
   if (!jointly_settled) {
     fail(result, HrnSectionTarget::positionPoint(),
@@ -418,6 +634,8 @@ bool enforceCoupledCircular(const HrnPositionPointInput& input,
       }
       for (size_t i = 0; i < children.size(); ++i)
         for (size_t j = i + 1; j < children.size(); ++j) {
+          if (classes.group(globalIndex({k, children[i]})) ==
+              classes.group(globalIndex({k, children[j]}))) continue;
           const auto distance = geometry.signedDistance(
               {side.centers2d[children[i]], side.sections[children[i]]->shape().dimensions().primary},
               {side.centers2d[children[j]], side.sections[children[j]]->shape().dimensions().primary},

@@ -1,25 +1,140 @@
 #include "hrn/section/HrnPositionPointSolver.h"
+#include "HrnSamePositionClasses.h"
 
 #include <cmath>
 #include <functional>
+#include <iomanip>
 #include <limits>
+#include <locale>
 #include <map>
+#include <sstream>
 
 #include "hrn/section/HrnPositionPoint.h"
 #include "hrn/section/HrnRuleBasedLayoutSolver.h"
 #include "hrn/section/HrnSectionGeometryService.h"
 
 namespace hrn {
+class HrnCircularPlacementSnapshot {
+ public:
+  std::string layout_key;
+  HrnCircularRotationBaseline baseline;
+  std::vector<double> radii[2];
+  double root_radii[2]{};
+};
+
 bool enforceCoupledCircular(const HrnPositionPointInput& input,
-                            const std::vector<HrnSegmentSideRelation>& relations,
-                            HrnCircularHierarchyResult& result);
+                            const HrnSamePositionClasses& classes,
+                            HrnCircularHierarchyResult& result, bool prefer_negative_seed,
+                            const HrnCircularRotationBaseline* rotation = nullptr);
 namespace {
-const double kModelingTolerance = 1e-9;
+const double kModelingTolerance = kHrnCircularModelingTolerance;
 const double kPi = 3.14159265358979323846;
+const ZeHrnSide kSides[] = {ZeHrnSide::Positive, ZeHrnSide::Negative};
 Point2D rotate(Point2D point, double degrees) {
   const double angle = degrees * kPi / 180;
   const double c = std::cos(angle), s = std::sin(angle);
   return {point.x * c - point.y * s, point.x * s + point.y * c};
+}
+std::string layoutKey(const HrnPositionPointInput& input,
+                      const std::vector<HrnSegmentSideRelation>& relations) {
+  std::ostringstream key;
+  key.imbue(std::locale::classic());
+  key << std::hexfloat;
+  for (const auto& row : input.positionTransform().m)
+    for (double value : row) key << (value == 0 ? 0 : value) << ' ';
+  const auto appendSection = [&](const HrnSectionData& section) {
+    const auto dims = section.shape().dimensions();
+    const auto& layout = section.layout();
+    const auto& settings = layout.solveSettings();
+    const double spacing = layout.spacingTolerance();
+    key << static_cast<int>(dims.shape_type) << ' ' << dims.primary << ' ' << dims.secondary
+        << ' ' << section.autoResizeEnabled() << ' ' << static_cast<int>(section.sizeUpdateMode())
+        << ' ' << static_cast<int>(layout.type()) << ' ' << (spacing == 0 ? 0 : spacing)
+        << ' ' << settings.algorithm_version << ' ' << settings.max_iterations
+        << ' ' << settings.convergence_tolerance << ' ';
+  };
+  for (const auto side : kSides) {
+    const size_t count = input.sectionCount(side);
+    key << count << ' ';
+    appendSection(input.sideRootSection(side));
+    for (size_t index = 0; index < count; ++index) {
+      size_t parent_index = count;
+      const auto* parent = input.segmentAt(side, index).parent();
+      if (parent) input.findSectionIndex(side, *parent, parent_index);
+      key << parent_index << ' ';
+      appendSection(input.sectionAt(side, index));
+    }
+  }
+  key << relations.size() << ' ';
+  for (const auto& relation : relations) {
+    size_t positive = 0, negative = 0;
+    input.findSectionIndex(kSides[0], *relation.positive, positive);
+    input.findSectionIndex(kSides[1], *relation.negative, negative);
+    key << positive << ' ' << negative << ' ' << relation.same_position << ' ';
+  }
+  return key.str();
+}
+void commitPlacement(HrnCircularHierarchyResult& result, const HrnPositionPointInput& input,
+                     const std::string& layout_key, double frame_rotation) {
+  result.status.committed = true;
+  result.frame_rotation = normalizeDegrees(frame_rotation);
+  auto snapshot = std::make_shared<HrnCircularPlacementSnapshot>();
+  snapshot->layout_key = layout_key;
+  snapshot->baseline.frame_rotation = result.frame_rotation;
+  for (size_t side_index = 0; side_index < 2; ++side_index) {
+    auto& side = result.sides[side_index];
+    auto& prior = snapshot->baseline.sides[side_index];
+    prior.centers = side.centers2d;
+    prior.absolute_rotations = side.absolute_rotations;
+    prior.root_rotation = input.sideRootSection(kSides[side_index]).rotation();
+    prior.reference_root_rotation = side.reference_root_rotation;
+    snapshot->root_radii[side_index] = side.root->shape().dimensions().primary;
+    for (size_t index = 0; index < side.sections.size(); ++index) {
+      prior.input_rotations.push_back(input.sectionAt(kSides[side_index], index).rotation());
+      snapshot->radii[side_index].push_back(side.sections[index]->shape().dimensions().primary);
+    }
+    if (result.frame_rotation == 0) continue;
+    side.reference_centers = side.centers2d;
+    for (size_t index = 0; index < side.centers2d.size(); ++index) {
+      const auto center = rotate(side.reference_centers[index], result.frame_rotation);
+      side.centers2d[index] = center;
+      side.absolute_rotations[index] =
+          normalizeDegrees(side.absolute_rotations[index] + result.frame_rotation);
+      side.locations[index] = transformPoint(input.positionTransform(), center);
+    }
+  }
+  result.placement = std::move(snapshot);
+}
+double fallbackDelta(const HrnCircularRotationBaseline& baseline,
+                     const HrnCircularHierarchyResult& attempted) {
+  const double requested = normalizeDegrees(baseline.fallback_delta);
+  if (requested != 0) return requested;
+  const int preferred = baseline.prefer_negative ? 1 : 0;
+  for (int side : {preferred, 1 - preferred}) {
+    const auto& prior = baseline.sides[side].absolute_rotations;
+    const auto& current = attempted.sides[side].absolute_rotations;
+    for (size_t index = 0; index < current.size(); ++index) {
+      const double delta = normalizeDegrees(current[index] - normalizeDegrees(prior[index]));
+      if (delta != 0) return delta;
+    }
+  }
+  return 0;
+}
+bool restoreSolvedSizes(HrnCircularHierarchyResult& result,
+                        const HrnCircularPlacementSnapshot& snapshot) {
+  const auto restore = [](std::unique_ptr<HrnSectionData>& section, double radius) {
+    if (section->shape().dimensions().primary == radius) return true;
+    if (!section->autoResizeEnabled()) return false;
+    section = section->withCircularRadius(radius, kModelingTolerance);
+    return section != nullptr;
+  };
+  for (size_t side = 0; side < 2; ++side) {
+    auto& restored = result.sides[side];
+    if (!restore(restored.root, snapshot.root_radii[side])) return false;
+    for (size_t index = 0; index < restored.sections.size(); ++index)
+      if (!restore(restored.sections[index], snapshot.radii[side][index])) return false;
+  }
+  return true;
 }
 HrnSectionTarget targetFor(ZeHrnSide side, const HrnCircularSolvedSide& data,
                            size_t index) {
@@ -33,9 +148,21 @@ void fail(HrnCircularHierarchyResult& result, HrnSectionTarget target,
       makeFailureDiagnostic(target, stage, reason, version, iterations));
 }
 bool solveSide(const HrnPositionPointInput& input, ZeHrnSide side,
-               HrnCircularHierarchyResult& output) {
+               const HrnSamePositionClasses& classes,
+               HrnCircularHierarchyResult& output,
+               const HrnCircularRotationBaseline::Side* rotation = nullptr,
+               bool preserve_placement = false) {
   HrnCircularSolvedSide& solved = output.sides[side == ZeHrnSide::Positive ? 0 : 1];
   const size_t count = input.sectionCount(side);
+  if (rotation && (rotation->centers.size() != count ||
+                   rotation->absolute_rotations.size() != count ||
+                   rotation->input_rotations.size() != count ||
+                   !std::isfinite(rotation->root_rotation) ||
+                   !std::isfinite(rotation->reference_root_rotation))) {
+    fail(output, HrnSectionTarget::sideRoot(side), HrnSectionFailureStage::InputValidation,
+         HrnSectionFailureReason::InvalidInput, 0, 0);
+    return false;
+  }
   solved.root = input.sideRootSection(side).clone();
   if (!solved.root || !HrnPositionPoint::validateSectionData(*solved.root) ||
       solved.root->layout().solveSettings().algorithm_version !=
@@ -54,7 +181,11 @@ bool solveSide(const HrnPositionPointInput& input, ZeHrnSide side,
     HrnSegment& segment = input.segmentAt(side, i);
     solved.segments.push_back(&segment);
     solved.sections.push_back(input.sectionAt(side, i).clone());
-    if (!solved.sections.back() ||
+    if ((rotation && (!std::isfinite(rotation->centers[i].x) ||
+                      !std::isfinite(rotation->centers[i].y) ||
+                      !std::isfinite(rotation->absolute_rotations[i]) ||
+                      !std::isfinite(rotation->input_rotations[i]))) ||
+        !solved.sections.back() ||
         !HrnPositionPoint::validateSectionData(*solved.sections.back()) ||
         solved.sections.back()->layout().solveSettings().algorithm_version !=
             HrnCircularRuleBasedLayoutSolver::kAlgorithmVersion ||
@@ -81,8 +212,21 @@ bool solveSide(const HrnPositionPointInput& input, ZeHrnSide side,
     HrnCircularLayoutRequest request;
     request.spacing = parent->layout().spacingTolerance();
     request.settings = parent->layout().solveSettings();
-    for (size_t member : members)
-      request.members.push_back({member, solved.sections[member]->shape().dimensions().primary});
+    // Same-center siblings share one envelope, but keep independent geometry.
+    std::map<size_t, size_t> group_indices;
+    std::vector<std::vector<size_t>> groups;
+    for (size_t member : members) {
+      const size_t group = classes.group(side, member);
+      const auto inserted = group_indices.emplace(group, groups.size());
+      if (inserted.second) {
+        groups.push_back({});
+        request.members.push_back({member, 0});
+      }
+      const size_t slot = inserted.first->second;
+      groups[slot].push_back(member);
+      const double radius = solved.sections[member]->shape().dimensions().primary;
+      if (radius > request.members[slot].radius) request.members[slot] = {member, radius};
+    }
     const HrnRuleLayoutResult placed = layout_solver.solve(request);
     solved.candidate_count += placed.candidate_count;
     solved.iterations_used += placed.iterations_used;
@@ -178,11 +322,13 @@ bool solveSide(const HrnPositionPointInput& input, ZeHrnSide side,
     }
     const double parent_radius = parent->shape().dimensions().primary;
     for (const auto& placement : placed.placements) {
-      local[placement.id] = {placement.center.x - enclosure.circle.center.x,
-                             placement.center.y - enclosure.circle.center.y};
+      const Point2D center{placement.center.x - enclosure.circle.center.x,
+                           placement.center.y - enclosure.circle.center.y};
+      for (size_t member : groups[group_indices.at(classes.group(side, placement.id))])
+        local[member] = center;
       const auto containment = geometry.containsWithClearance(
           HrnCircle2D{{0, 0}, parent_radius},
-          HrnCircle2D{local[placement.id], placement.radius}, request.spacing,
+          HrnCircle2D{center, placement.radius}, request.spacing,
           kModelingTolerance);
       if (!containment.valid || !containment.contained) {
         fail(output, target, HrnSectionFailureStage::GeometryValidation,
@@ -197,39 +343,120 @@ bool solveSide(const HrnPositionPointInput& input, ZeHrnSide side,
     for (size_t child : children[node]) if (!bottomUp(child)) return false;
     return placeChildren(solved.sections[node], children[node], targetFor(side, solved, node));
   };
-  for (size_t root : roots) if (!bottomUp(root)) return false;
-  if (roots.size() > 1 &&
-      !placeChildren(solved.root, roots, HrnSectionTarget::sideRoot(side))) return false;
+  if (!rotation) {
+    for (size_t root : roots) if (!bottomUp(root)) return false;
+    if (roots.size() > 1 &&
+        !placeChildren(solved.root, roots, HrnSectionTarget::sideRoot(side))) return false;
+  }
   const double root_rotation = roots.size() > 1 ? solved.root->rotation() : 0;
-  std::function<void(size_t, Point2D, double)> topDown =
-      [&](size_t node, Point2D parent_center, double parent_rotation) {
-        const Point2D offset = rotate(local[node], parent_rotation);
-        const Point2D absolute{parent_center.x + offset.x, parent_center.y + offset.y};
+  const double root_delta = rotation && roots.size() > 1 ?
+      normalizeDegrees(root_rotation - normalizeDegrees(rotation->root_rotation)) : 0;
+  solved.reference_root_rotation = rotation ? normalizeDegrees(
+      normalizeDegrees(rotation->reference_root_rotation) + (preserve_placement ? 0 : root_delta)) :
+      root_rotation;
+  std::function<void(size_t, size_t, Point2D, double, double)> topDown =
+      [&](size_t node, size_t parent, Point2D parent_center, double parent_rotation,
+          double parent_delta) {
+        Point2D absolute;
+        const double local_rotation = solved.sections[node]->rotation();
+        double node_delta = 0;
+        double node_rotation = normalizeDegrees(parent_rotation + local_rotation);
+        if (rotation) {
+          const Point2D previous = rotation->centers[node];
+          const Point2D pivot = parent == count ? Point2D{0, 0} : rotation->centers[parent];
+          node_delta = preserve_placement ? 0 : normalizeDegrees(
+              parent_delta + (local_rotation - normalizeDegrees(rotation->input_rotations[node])));
+          node_rotation = normalizeDegrees(
+              normalizeDegrees(rotation->absolute_rotations[node]) + node_delta);
+          if (preserve_placement) {
+            absolute = previous;
+          } else if (parent_delta == 0) {
+            absolute = {previous.x + (parent_center.x - pivot.x),
+                        previous.y + (parent_center.y - pivot.y)};
+          } else {
+            const Point2D offset = rotate({previous.x - pivot.x, previous.y - pivot.y}, parent_delta);
+            absolute = {parent_center.x + offset.x, parent_center.y + offset.y};
+          }
+        } else {
+          const Point2D offset = rotate(local[node], parent_rotation);
+          absolute = {parent_center.x + offset.x, parent_center.y + offset.y};
+        }
         solved.centers2d[node] = absolute;
-        solved.absolute_rotations[node] = normalizeDegrees(
-            parent_rotation + solved.sections[node]->rotation());
+        solved.absolute_rotations[node] = node_rotation;
         solved.locations[node] = transformPoint(input.positionTransform(), absolute);
         for (size_t child : children[node])
-          topDown(child, absolute, solved.absolute_rotations[node]);
+          topDown(child, node, absolute, node_rotation, node_delta);
       };
-  for (size_t root : roots) topDown(root, {0, 0}, root_rotation);
+  for (size_t root : roots) topDown(root, count, {0, 0}, root_rotation, root_delta);
   return true;
 }
 }  // namespace
 
 HrnCircularHierarchyResult HrnPositionPointSolver::solveCircular(
     const HrnPositionPointInput& input,
-    const std::vector<HrnSegmentSideRelation>& relations) const {
+    const std::vector<HrnSegmentSideRelation>& relations,
+    const HrnCircularRotationBaseline* rotation) const {
   HrnCircularHierarchyResult result;
-  if (!isRigidTransform(input.positionTransform(), kModelingTolerance)) {
+  if (!isRigidTransform(input.positionTransform(), kModelingTolerance) ||
+      (rotation && (!std::isfinite(rotation->fallback_delta) ||
+                    !std::isfinite(rotation->frame_rotation)))) {
     fail(result, HrnSectionTarget::positionPoint(), HrnSectionFailureStage::InputValidation,
          HrnSectionFailureReason::InvalidInput, 0, 0);
     return result;
   }
-  if (!solveSide(input, ZeHrnSide::Positive, result) ||
-      !solveSide(input, ZeHrnSide::Negative, result)) return result;
-  if (!enforceCoupledCircular(input, relations, result)) return result;
-  result.status.committed = true;
+  HrnSamePositionClasses classes;
+  if (!classes.build(input, relations)) {
+    fail(result, HrnSectionTarget::positionPoint(), HrnSectionFailureStage::InputValidation,
+         HrnSectionFailureReason::InvalidInput, 0, 0);
+    return result;
+  }
+  const auto key = layoutKey(input, relations);
+  const auto* snapshot = rotation ? rotation->placement.get() : nullptr;
+  HrnCircularRotationBaseline resolved;
+  if (snapshot) {
+    if (key != snapshot->layout_key) {
+      fail(result, HrnSectionTarget::positionPoint(), HrnSectionFailureStage::InputValidation,
+           HrnSectionFailureReason::InvalidInput, 0, 0);
+      return result;
+    }
+    resolved = snapshot->baseline;
+    resolved.fallback_delta = rotation->fallback_delta;
+    resolved.prefer_negative = rotation->prefer_negative;
+    rotation = &resolved;
+  }
+  if (!solveSide(input, ZeHrnSide::Positive, classes, result,
+                 rotation ? &rotation->sides[0] : nullptr) ||
+      !solveSide(input, ZeHrnSide::Negative, classes, result,
+                 rotation ? &rotation->sides[1] : nullptr)) return result;
+  if (!enforceCoupledCircular(input, classes, result, rotation && rotation->prefer_negative,
+                              rotation)) {
+    if (rotation) {
+      const double delta = fallbackDelta(*rotation, result);
+      HrnCircularHierarchyResult retry;
+      if ((snapshot || delta != 0) &&
+          solveSide(input, ZeHrnSide::Positive, classes, retry, &rotation->sides[0], true) &&
+          solveSide(input, ZeHrnSide::Negative, classes, retry, &rotation->sides[1], true) &&
+          (snapshot ? restoreSolvedSizes(retry, *snapshot) :
+           enforceCoupledCircular(input, classes, retry, rotation->prefer_negative, rotation))) {
+        retry.used_global_rotation = delta != 0;
+        commitPlacement(retry, input, key, normalizeDegrees(rotation->frame_rotation) + delta);
+        return retry;
+      }
+      return result;
+    }
+    if (result.status.primary_reason != HrnSectionFailureReason::NoSolutionFound) return result;
+    // A seeded collision or boundary violation is not a proof of infeasibility. Retry once
+    // with the opposite independent seeds, without using mutated geometry.
+    HrnCircularHierarchyResult retry;
+    if (!solveSide(input, ZeHrnSide::Positive, classes, retry) ||
+        !solveSide(input, ZeHrnSide::Negative, classes, retry)) return result;
+    if (!enforceCoupledCircular(input, classes, retry, true) &&
+        retry.status.primary_reason != HrnSectionFailureReason::SamePositionConstraintConflict)
+      return result;
+    result = std::move(retry);
+    if (result.status.primary_reason != HrnSectionFailureReason::None) return result;
+  }
+  commitPlacement(result, input, key, rotation ? rotation->frame_rotation : 0);
   return result;
 }
 }  // namespace hrn

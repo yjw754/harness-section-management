@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "modelingTolerance": 1e-9,
+  "positionTransform": [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1],
+  "roots": {
+    "positive": {"shape": {"kind": "circular", "radius": 32}, "rotation": 15, "spacing": 0, "autoResize": false},
+    "negative": {"shape": {"kind": "circular", "radius": 22}, "rotation": -20, "spacing": 0, "autoResize": false}
+  },
+  "sections": [
+    {"id": "p-shell", "label": "Positive shell", "side": "positive", "parentId": null, "shape": {"kind": "circular", "radius": 16}, "rotation": 25, "spacing": 0, "autoResize": false},
+    {"id": "p-outer", "label": "Positive outer peer", "side": "positive", "parentId": null, "shape": {"kind": "circular", "radius": 4}, "rotation": 0, "spacing": 0, "autoResize": false},
+    {"id": "p-core", "label": "Positive core", "side": "positive", "parentId": "p-shell", "shape": {"kind": "circular", "radius": 9}, "rotation": -10, "spacing": 0, "autoResize": false},
+    {"id": "p-middle", "label": "Positive middle peer", "side": "positive", "parentId": "p-shell", "shape": {"kind": "circular", "radius": 3}, "rotation": 0, "spacing": 0, "autoResize": false},
+    {"id": "p-branch", "label": "Positive branch", "side": "positive", "parentId": "p-core", "shape": {"kind": "circular", "radius": 5}, "rotation": 35, "spacing": 0, "autoResize": false},
+    {"id": "p-inner", "label": "Positive inner peer", "side": "positive", "parentId": "p-core", "shape": {"kind": "circular", "radius": 2}, "rotation": 0, "spacing": 0, "autoResize": false},
+    {"id": "p-tip", "label": "Positive tip", "side": "positive", "parentId": "p-branch", "shape": {"kind": "circular", "radius": 2}, "rotation": 0, "spacing": 0, "autoResize": false},
+    {"id": "p-twig", "label": "Positive twig", "side": "positive", "parentId": "p-branch", "shape": {"kind": "circular", "radius": 1}, "rotation": 0, "spacing": 0, "autoResize": false},
+    {"id": "n-shell", "label": "Negative shell", "side": "negative", "parentId": null, "shape": {"kind": "circular", "radius": 10}, "rotation": -30, "spacing": 0, "autoResize": false},
+    {"id": "n-outer", "label": "Negative outer peer", "side": "negative", "parentId": null, "shape": {"kind": "circular", "radius": 3}, "rotation": 0, "spacing": 0, "autoResize": false},
+    {"id": "n-tip", "label": "Negative tip", "side": "negative", "parentId": "n-shell", "shape": {"kind": "circular", "radius": 2}, "rotation": 0, "spacing": 0, "autoResize": false},
+    {"id": "n-twig", "label": "Negative twig", "side": "negative", "parentId": "n-shell", "shape": {"kind": "circular", "radius": 3}, "rotation": 0, "spacing": 0, "autoResize": false}
+  ],
+  "relations": [
+    {"positiveId": "p-tip", "negativeId": "n-tip", "samePosition": false}
+  ]
+}

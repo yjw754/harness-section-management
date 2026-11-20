@@ -118,3 +118,74 @@ TEST(HrnCircularRuleLayout, RejectsUnknownVersionAndHonorsBudget) {
   input.members[0].radius = -1;
   EXPECT_EQ(solver.solve(input).reason, HrnSectionFailureReason::InvalidInput);
 }
+
+TEST(HrnCircularRuleLayout, PacksAroundTwoFixedCentersWithoutMovingThem) {
+  auto input = request({8, 1, 1, 1, 1, 1, 1, 1});
+  input.fixed_placements = {{100, 1, {-5, 0}}, {101, 1, {8, 0}}};
+  input.parent_radius_limit = 20;
+  const auto result = HrnCircularRuleBasedLayoutSolver().solve(input);
+  ASSERT_TRUE(result.succeeded);
+  ASSERT_EQ(result.placements.size(), 10u);
+  EXPECT_DOUBLE_EQ(result.placements[0].center.x, -5);
+  EXPECT_DOUBLE_EQ(result.placements[1].center.x, 8);
+  const auto main = result.placements[2];
+  EXPECT_EQ(main.id, 0u);
+  EXPECT_NEAR(std::hypot(main.center.x + 5, main.center.y), 9, 1e-9);
+  EXPECT_NEAR(std::hypot(main.center.x - 8, main.center.y), 9, 1e-9);
+  EXPECT_LE(result.required_parent_radius, 15);
+  EXPECT_EQ(result.iterations_used, 8u);
+}
+
+TEST(HrnCircularRuleLayout, FixedEnvelopeTiesPreferPositionsCloserToParentCenter) {
+  auto input = request({1});
+  input.fixed_placements = {{100, 1, {10, 0}}, {101, 1, {12, 0}}};
+  const auto result = HrnCircularRuleBasedLayoutSolver().solve(input);
+  ASSERT_TRUE(result.succeeded);
+  ASSERT_EQ(result.placements.size(), 3u);
+  EXPECT_DOUBLE_EQ(result.placements.back().center.x, 0);
+  EXPECT_DOUBLE_EQ(result.placements.back().center.y, 0);
+  EXPECT_DOUBLE_EQ(result.required_parent_radius, 13);
+}
+
+TEST(HrnCircularRuleLayout, FixedBoundaryFiltersCandidatesDuringSearch) {
+  auto input = request({2});
+  input.fixed_placements = {{100, 1, {2.5, 0}}};
+  input.parent_radius_limit = 4;
+  const auto result = HrnCircularRuleBasedLayoutSolver().solve(input);
+  ASSERT_TRUE(result.succeeded);
+  ASSERT_EQ(result.placements.size(), 2u);
+  EXPECT_NEAR(result.placements.back().center.x, -0.5, 1e-9);
+  EXPECT_NEAR(result.placements.back().center.y, 0, 1e-9);
+  EXPECT_LE(result.required_parent_radius, 4);
+
+  input.spacing = 1;
+  input.parent_radius_limit = 5;
+  const auto spaced = HrnCircularRuleBasedLayoutSolver().solve(input);
+  ASSERT_TRUE(spaced.succeeded);
+  const auto free = spaced.placements.back().center;
+  EXPECT_GE(std::hypot(free.x - 2.5, free.y) + 1e-9, 4);
+  EXPECT_LE(std::hypot(free.x, free.y) + 3, 5 + 1e-9);
+}
+
+TEST(HrnCircularRuleLayout, RejectsInvalidFixedGeometryAndHonorsFreePlacementBudget) {
+  HrnCircularRuleBasedLayoutSolver solver;
+  auto input = request({1, 1});
+  input.fixed_placements = {{100, 1, {0, 0}}};
+  input.settings.max_iterations = 1;
+  const auto budget = solver.solve(input);
+  EXPECT_FALSE(budget.succeeded);
+  EXPECT_EQ(budget.reason, HrnSectionFailureReason::IterationBudgetExceeded);
+  EXPECT_EQ(budget.iterations_used, 1u);
+  input.settings.max_iterations = 1000;
+  input.fixed_placements[0].id = 0;
+  EXPECT_EQ(solver.solve(input).reason, HrnSectionFailureReason::InvalidInput);
+  input.fixed_placements[0].id = 100;
+  input.fixed_placements[0].radius = -1;
+  EXPECT_EQ(solver.solve(input).reason, HrnSectionFailureReason::InvalidInput);
+  input.fixed_placements[0].radius = 1;
+  input.fixed_placements.push_back({101, 1, {0, 0}});
+  EXPECT_FALSE(solver.solve(input).succeeded);
+  input.fixed_placements.pop_back();
+  input.parent_radius_limit = 0.5;
+  EXPECT_FALSE(solver.solve(input).succeeded);
+}

@@ -88,7 +88,7 @@ class VisualReportBrowserTest(unittest.TestCase):
         self.page.locator('.tree-node[data-node="p4"]').click()
         self.assertEqual(self.active_nodes(), ["p4"])
         self.page.locator(".map-row").last.click()
-        self.assertEqual(self.active_nodes(), ["p2", "n2"])
+        self.assertEqual(self.active_nodes(), ["p0", "n2"])
         self.assertIn("N3", self.page.locator("#section-detail").inner_text())
 
     def test_dark_narrow_layout_retains_circle_selection(self):
@@ -110,6 +110,21 @@ class VisualReportBrowserTest(unittest.TestCase):
         detail = self.page.locator("#section-detail").inner_text()
         self.assertIn("mix-p-otm", detail)
         self.assertIn("mix-n-otm-parent", detail)
+
+    def test_mapped_sibling_overlap_reports_keep_both_members(self):
+        for name, members in (("stage2-overlap-2-1.html", ("p0", "p1")),
+                               ("stage2-overlap-1-2.html", ("n0", "n1"))):
+            with self.subTest(case=name):
+                self.open_report("stage2-case-matrix-index.html")
+                self.page.locator(f'a[href="{name}"]').click()
+                self.assertEqual(self.page.locator(".section-circle").count(), 3)
+                first, second = [self.page.locator(f'.section-circle[data-node="{m}"]')
+                                 for m in members]
+                for attribute in ("cx", "cy", "r"):
+                    self.assertEqual(first.get_attribute(attribute), second.get_attribute(attribute))
+                for member in members:
+                    self.page.locator(f'.tree-node[data-node="{member}"]').click()
+                    self.assertIn(member, self.active_nodes())
 
 
 if __name__ == "__main__":

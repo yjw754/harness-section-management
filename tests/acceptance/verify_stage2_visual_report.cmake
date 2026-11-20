@@ -18,9 +18,12 @@ set(roots_1_n "${OUTPUT_DIR}/stage2-roots-1-n-one-to-many.html")
 set(roots_n_1 "${OUTPUT_DIR}/stage2-roots-n-1-many-to-one.html")
 set(roots_n_n "${OUTPUT_DIR}/stage2-roots-n-n-mixed.html")
 set(matrix_index "${OUTPUT_DIR}/stage2-case-matrix-index.html")
+set(overlap_2_1 "${OUTPUT_DIR}/stage2-overlap-2-1.html")
+set(overlap_1_2 "${OUTPUT_DIR}/stage2-overlap-1-2.html")
 foreach(file IN ITEMS "${success}" "${failure}" "${nested}" "${single_pair}" "${two_parents}"
     "${roots_0_0}" "${roots_0_1}" "${roots_1_0}" "${roots_0_n}" "${roots_n_0}"
-    "${roots_1_1}" "${roots_1_n}" "${roots_n_1}" "${roots_n_n}" "${matrix_index}")
+    "${roots_1_1}" "${roots_1_n}" "${roots_n_1}" "${roots_n_n}" "${matrix_index}"
+    "${overlap_2_1}" "${overlap_1_2}")
   if(NOT EXISTS "${file}")
     message(FATAL_ERROR "missing report: ${file}")
   endif()
@@ -40,6 +43,8 @@ file(READ "${roots_1_n}" roots_1_n_html)
 file(READ "${roots_n_1}" roots_n_1_html)
 file(READ "${roots_n_n}" roots_n_n_html)
 file(READ "${matrix_index}" matrix_index_html)
+file(READ "${overlap_2_1}" overlap_2_1_html)
+file(READ "${overlap_1_2}" overlap_1_2_html)
 function(assert_case_topology case_name html_variable expected_positive_roots
     expected_negative_roots expected_positive_members expected_negative_members)
   set(report_html "${${html_variable}}")
@@ -85,6 +90,14 @@ assert_case_topology("1 x 1" roots_1_1_html 1 1 2 3)
 assert_case_topology("1 x N" roots_1_n_html 1 2 1 3)
 assert_case_topology("N x 1" roots_n_1_html 2 1 3 1)
 assert_case_topology("N x N" roots_n_n_html 3 3 6 5)
+assert_case_topology("overlap 2 x 1" overlap_2_1_html 2 1 2 1)
+assert_case_topology("overlap 1 x 2" overlap_1_2_html 1 2 1 2)
+foreach(overlap_html IN ITEMS "${overlap_2_1_html}" "${overlap_1_2_html}")
+  string(FIND "${overlap_html}" "排布成功" index)
+  if(index EQUAL -1)
+    message(FATAL_ERROR "mapped sibling overlap report is not solved")
+  endif()
+endforeach()
 foreach(empty_side_html IN ITEMS "${roots_0_0_html}" "${roots_0_1_html}" "${roots_1_0_html}"
     "${roots_0_n_html}" "${roots_n_0_html}")
   string(FIND "${empty_side_html}" "排布成功" index)
@@ -205,7 +218,8 @@ foreach(expected IN ITEMS "0/1/N × 0/1/N" "一对一" "一对多" "多对一" "
     "stage2-roots-0-0.html" "stage2-roots-0-1.html" "stage2-roots-1-0.html"
     "stage2-roots-0-n.html" "stage2-roots-n-0.html"
     "stage2-roots-1-1-one-to-one.html" "stage2-roots-1-n-one-to-many.html"
-    "stage2-roots-n-1-many-to-one.html" "stage2-roots-n-n-mixed.html")
+    "stage2-roots-n-1-many-to-one.html" "stage2-roots-n-n-mixed.html"
+    "stage2-overlap-2-1.html" "stage2-overlap-1-2.html")
   string(FIND "${matrix_index_html}" "${expected}" index)
   if(index EQUAL -1)
     message(FATAL_ERROR "case matrix index missing: ${expected}")
@@ -243,7 +257,7 @@ list(LENGTH two_parent_relations relation_count)
 if(NOT relation_count EQUAL 3)
   message(FATAL_ERROR "two-parent report must contain exactly three relations")
 endif()
-foreach(text IN ITEMS "排布失败" "SamePositionConstraintConflict" "SamePositionIncompatible"
+foreach(text IN ITEMS "排布失败" "FixedBoundaryInsufficient" "OutsideParent"
     "正侧层级" "负侧层级" "同位置")
   string(FIND "${failed}" "${text}" index)
   if(index EQUAL -1)

@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "modelingTolerance": 1e-9,
+  "positionTransform": [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1],
+  "roots": {
+    "positive": {"shape": {"kind": "circular", "radius": 19}, "rotation": 30, "spacing": 1.5, "autoResize": false},
+    "negative": {"shape": {"kind": "circular", "radius": 2}, "rotation": -15, "spacing": 0.75, "autoResize": true}
+  },
+  "sections": [
+    {"id": "p-auto", "label": "Positive auto container", "side": "positive", "parentId": null, "shape": {"kind": "circular", "radius": 1}, "rotation": 10, "spacing": 0.5, "autoResize": true},
+    {"id": "p-a", "label": "Positive child A", "side": "positive", "parentId": "p-auto", "shape": {"kind": "circular", "radius": 2}, "rotation": 0, "spacing": 0, "autoResize": false},
+    {"id": "p-b", "label": "Positive child B", "side": "positive", "parentId": "p-auto", "shape": {"kind": "circular", "radius": 3}, "rotation": 0, "spacing": 0, "autoResize": false},
+    {"id": "p-free", "label": "Positive free peer", "side": "positive", "parentId": null, "shape": {"kind": "circular", "radius": 4}, "rotation": 0, "spacing": 0, "autoResize": false},
+    {"id": "n-fixed", "label": "Negative fixed container", "side": "negative", "parentId": null, "shape": {"kind": "circular", "radius": 8}, "rotation": -10, "spacing": 1, "autoResize": false},
+    {"id": "n-a", "label": "Negative child A", "side": "negative", "parentId": "n-fixed", "shape": {"kind": "circular", "radius": 3}, "rotation": 0, "spacing": 0, "autoResize": false},
+    {"id": "n-b", "label": "Negative child B", "side": "negative", "parentId": "n-fixed", "shape": {"kind": "circular", "radius": 2}, "rotation": 0, "spacing": 0, "autoResize": false},
+    {"id": "n-free", "label": "Negative free peer", "side": "negative", "parentId": null, "shape": {"kind": "circular", "radius": 4}, "rotation": 0, "spacing": 0, "autoResize": false}
+  ],
+  "relations": []
+}

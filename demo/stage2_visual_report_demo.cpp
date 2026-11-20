@@ -30,12 +30,21 @@ hrn::HrnSectionTestCase makeCase(bool conflict) {
       .parent("P5", "P4")
       .sideRootCircular(ZeHrnSide::Positive, root)
       .sideRootCircular(ZeHrnSide::Negative, root);
-  for (const char* label : {"P1", "P2", "P3", "P4", "P5", "P6"})
-    builder.circularSection(ZeHrnSide::Positive, label, member);
+  for (const char* label : {"P1", "P2", "P3", "P4", "P5", "P6"}) {
+    auto options = member;
+    if (conflict && std::string(label) == "P4") {
+      options.radius = 1;
+      options.auto_resize_enabled = false;
+    }
+    builder.circularSection(ZeHrnSide::Positive, label, options);
+  }
   for (const char* label : {"N1", "N2", "N3"})
     builder.circularSection(ZeHrnSide::Negative, label, member);
   builder.relate("P1", "N1", true).relate("P1", "N2", false)
-      .relate("P2", "N2", false).relate("P3", "N3", conflict);
+      .relate("P2", "N2", false);
+  // Shared-center siblings are supported; the failure is P5 outside fixed P4.
+  if (conflict) builder.relate("P1", "N3", true);
+  else builder.relate("P3", "N3", false);
   return builder.build();
 }
 hrn::HrnSectionTestCase makeNestedPairsCase(bool two_pairs) {
@@ -136,6 +145,27 @@ hrn::HrnSectionTestCase makeRootCountCase(int positive_roots, int negative_roots
         .circularSection(ZeHrnSide::Negative, "negative-root-a-child", nested)
         .circularSection(ZeHrnSide::Negative, "negative-root-b", other);
   }
+  return builder.build();
+}
+hrn::HrnSectionTestCase makeMappedSiblingOverlapCase(bool many_positive) {
+  using namespace hrn;
+  HrnCircularSectionCaseOptions root;
+  root.radius = 20;
+  root.auto_resize_enabled = true;
+  HrnCircularSectionCaseOptions member;
+  member.radius = 8;
+  const auto multi = many_positive ? ZeHrnSide::Positive : ZeHrnSide::Negative;
+  HrnSectionCaseBuilder builder;
+  builder.positionTransform(Matrix4D{}).modelingTolerance(1e-9)
+      .segment("p-main").segment("n-main").segment("extra")
+      .sideRootCircular(ZeHrnSide::Positive, root)
+      .sideRootCircular(ZeHrnSide::Negative, root)
+      .circularSection(ZeHrnSide::Positive, "p-main", member)
+      .circularSection(ZeHrnSide::Negative, "n-main", member)
+      .circularSection(multi, "extra", member)
+      .relate("p-main", "n-main", true);
+  if (many_positive) builder.relate("extra", "n-main", true);
+  else builder.relate("p-main", "extra", true);
   return builder.build();
 }
 hrn::HrnSectionTestCase makeOneToOneRootCase() {
@@ -319,7 +349,7 @@ th{background:color-mix(in srgb,var(--accent) 9%,var(--card))}tr:last-child td{b
 <tr><td>1</td><td>N</td><td>一对多</td><td>负侧父子同心嵌套，另有一个无关顶层 Section</td><td class="ok">排布成功</td><td><a href="stage2-roots-1-n-one-to-many.html">1 × N</a></td></tr>
 <tr><td>N</td><td>1</td><td>多对一</td><td>正侧父子同心嵌套，另有一个无关顶层 Section</td><td class="ok">排布成功</td><td><a href="stage2-roots-n-1-many-to-one.html">N × 1</a></td></tr>
 <tr><td>N</td><td>N</td><td>混合</td><td>两侧各三棵不等深树；一对一、一对多、多对一分组独立</td><td class="ok">排布成功</td><td><a href="stage2-roots-n-n-mixed.html">N × N</a></td></tr>
-</tbody></table></section><p class="note">一对多或多对一中，同侧共享圆心的 Section 均为半径递减的祖先—后代关系；它们相互包含，不以兄弟节点方式重叠。</p>
+</tbody></table></section><p class="note">上表的一对多和多对一展示父子嵌套。同位置映射也支持同侧兄弟截面共享圆心并重叠：<a href="stage2-overlap-2-1.html">2 对 1 重叠</a>、<a href="stage2-overlap-1-2.html">1 对 2 重叠</a>。同一映射连通组以最大半径占位，不同组仍满足间距和父边界包含要求。</p>
 </main></body></html>)HTML";
   return static_cast<bool>(file);
 }
@@ -351,6 +381,8 @@ int main(int argc, char** argv) {
       !writeCase(directory + "/stage2-roots-1-n-one-to-many.html", makeOneToManyCase(), false) ||
       !writeCase(directory + "/stage2-roots-n-1-many-to-one.html", makeManyToOneCase(), false) ||
       !writeCase(directory + "/stage2-roots-n-n-mixed.html", makeMixedManyRootCase(), false) ||
+      !writeCase(directory + "/stage2-overlap-2-1.html", makeMappedSiblingOverlapCase(true), false) ||
+      !writeCase(directory + "/stage2-overlap-1-2.html", makeMappedSiblingOverlapCase(false), false) ||
       !writeCaseMatrixIndex(directory + "/stage2-case-matrix-index.html"))
     return 1;
   std::cout << directory + "/stage2-solved.html\n"
@@ -367,6 +399,8 @@ int main(int argc, char** argv) {
             << directory + "/stage2-roots-1-n-one-to-many.html\n"
             << directory + "/stage2-roots-n-1-many-to-one.html\n"
             << directory + "/stage2-roots-n-n-mixed.html\n"
+            << directory + "/stage2-overlap-2-1.html\n"
+            << directory + "/stage2-overlap-1-2.html\n"
             << directory + "/stage2-case-matrix-index.html\n";
   return 0;
 }

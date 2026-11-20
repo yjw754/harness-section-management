@@ -7,6 +7,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 option(HRN_BUILD_TESTS "Build tests" ON)
 option(HRN_BUILD_DEMO "Build Stage 1 demo" OFF)
 option(HRN_BUILD_VISUAL_REPORT "Build optional Stage 2 HTML report exporter" OFF)
+option(HRN_BUILD_INTERACTIVE_DEBUG_TOOL "Build the local Stage 2 WebAssembly debugger" OFF)
 option(HRN_ENABLE_PRODUCT_ADAPTER "Require product integration paths" OFF)
 option(HRN_ENABLE_ASAN "Enable address sanitizer" OFF)
 option(HRN_WARNINGS_AS_ERRORS "Treat project warnings as errors" OFF)
@@ -19,6 +20,14 @@ if(NOT HRN_MAX_STAGE MATCHES "^[123]$")
 endif()
 if(HRN_BUILD_VISUAL_REPORT AND HRN_MAX_STAGE STREQUAL "1")
   message(FATAL_ERROR "HRN_BUILD_VISUAL_REPORT requires HRN_MAX_STAGE=2 or 3")
+endif()
+if(HRN_BUILD_INTERACTIVE_DEBUG_TOOL)
+  if(NOT EMSCRIPTEN)
+    message(FATAL_ERROR "HRN_BUILD_INTERACTIVE_DEBUG_TOOL requires Emscripten; use emcmake to configure")
+  endif()
+  if(HRN_MAX_STAGE STREQUAL "1")
+    message(FATAL_ERROR "HRN_BUILD_INTERACTIVE_DEBUG_TOOL requires HRN_MAX_STAGE=2 or 3")
+  endif()
 endif()
 include(cmake/HrnProductIntegration.cmake)
 if(HRN_ENABLE_ASAN)
@@ -41,7 +50,11 @@ target_compile_options(hrn_section_core PRIVATE -Wall -Wextra -Wpedantic)
 if(HRN_WARNINGS_AS_ERRORS)
   target_compile_options(hrn_section_core PRIVATE -Werror)
 endif()
-if(HRN_BUILD_VISUAL_REPORT)
+set(HRN_BUILD_INTERACTIVE_TEST OFF)
+if(HRN_BUILD_TESTS AND NOT EMSCRIPTEN AND NOT HRN_MAX_STAGE STREQUAL "1")
+  set(HRN_BUILD_INTERACTIVE_TEST ON)
+endif()
+if(HRN_BUILD_VISUAL_REPORT OR HRN_BUILD_INTERACTIVE_DEBUG_TOOL OR HRN_BUILD_INTERACTIVE_TEST)
   add_library(hrn_visual_report demo/HrnSectionVisualReport.cpp)
   target_link_libraries(hrn_visual_report PUBLIC hrn_section_core)
   target_include_directories(hrn_visual_report PUBLIC demo)
@@ -49,6 +62,59 @@ if(HRN_BUILD_VISUAL_REPORT)
   if(HRN_WARNINGS_AS_ERRORS)
     target_compile_options(hrn_visual_report PRIVATE -Werror)
   endif()
+endif()
+if(HRN_BUILD_INTERACTIVE_DEBUG_TOOL OR HRN_BUILD_INTERACTIVE_TEST)
+  add_library(hrn_interactive_case STATIC demo/interactive/HrnInteractiveCase.cpp)
+  target_link_libraries(hrn_interactive_case PUBLIC hrn_visual_report)
+  target_include_directories(hrn_interactive_case PUBLIC demo/interactive)
+  target_compile_options(hrn_interactive_case PRIVATE -Wall -Wextra -Wpedantic)
+  if(HRN_WARNINGS_AS_ERRORS)
+    target_compile_options(hrn_interactive_case PRIVATE -Werror)
+  endif()
+endif()
+if(HRN_BUILD_INTERACTIVE_DEBUG_TOOL)
+  set(hrn_interactive_link_dir "${CMAKE_CURRENT_BINARY_DIR}/interactive-link")
+  add_executable(hrn_interactive_solver_linked demo/interactive/HrnInteractiveBindings.cpp)
+  target_link_libraries(hrn_interactive_solver_linked PRIVATE hrn_interactive_case)
+  target_link_options(hrn_interactive_solver_linked PRIVATE -lembind --no-entry
+    -sMODULARIZE=1 -sEXPORT_ES6=1 -sENVIRONMENT=web -sALLOW_MEMORY_GROWTH=1)
+  # Current Embind headers require C++17; the solver/core targets remain C++14.
+  set_target_properties(hrn_interactive_solver_linked PROPERTIES
+    CXX_STANDARD 17 SUFFIX ".js" OUTPUT_NAME hrn_interactive_solver
+    RUNTIME_OUTPUT_DIRECTORY "${hrn_interactive_link_dir}")
+
+  get_property(hrn_interactive_multi_config GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)
+  # CMake 3.20 added configuration expressions to BYPRODUCTS.
+  if(NOT hrn_interactive_multi_config OR CMAKE_VERSION VERSION_GREATER_EQUAL "3.20")
+    set(hrn_interactive_wasm_dir "${hrn_interactive_link_dir}")
+    if(hrn_interactive_multi_config)
+      string(APPEND hrn_interactive_wasm_dir "/$<CONFIG>")
+    endif()
+    # Emscripten emits the WASM alongside CMake's primary JS output.
+    add_custom_command(TARGET hrn_interactive_solver_linked POST_BUILD
+      BYPRODUCTS "${hrn_interactive_wasm_dir}/hrn_interactive_solver.wasm"
+      COMMAND "${CMAKE_COMMAND}" -E true
+      VERBATIM)
+  endif()
+
+  if(CMAKE_GENERATOR MATCHES "Makefiles")
+    # Make cleans byproducts but only checks the primary output before linking.
+    add_custom_target(hrn_interactive_check_link_outputs
+      COMMAND "${CMAKE_COMMAND}" "-DLINKED_DIR=${hrn_interactive_link_dir}"
+        -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/HrnCheckInteractiveLink.cmake"
+      VERBATIM)
+    add_dependencies(hrn_interactive_solver_linked hrn_interactive_check_link_outputs)
+  endif()
+
+  # Script mode tracks UI edits even when the solver did not need relinking.
+  add_custom_target(hrn_interactive_solver ALL
+    COMMAND "${CMAKE_COMMAND}"
+      "-DSOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}/demo/interactive"
+      "-DLINKED_DIR=$<TARGET_FILE_DIR:hrn_interactive_solver_linked>"
+      "-DOUTPUT_DIR=${CMAKE_CURRENT_BINARY_DIR}/interactive"
+      -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/HrnPackageInteractive.cmake"
+    VERBATIM)
+  add_dependencies(hrn_interactive_solver hrn_interactive_solver_linked)
 endif()
 if(HRN_BUILD_TESTS)
   if(POLICY CMP0135)
@@ -91,6 +157,10 @@ if(HRN_BUILD_TESTS)
     list(REMOVE_ITEM HRN_TEST_SOURCES
       "${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/hrn_section_visual_report_test.cpp")
   endif()
+  if(NOT HRN_BUILD_INTERACTIVE_TEST)
+    list(REMOVE_ITEM HRN_TEST_SOURCES
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/hrn_interactive_case_test.cpp")
+  endif()
   foreach(test_source IN LISTS HRN_TEST_SOURCES)
     get_filename_component(test_name ${test_source} NAME_WE)
     add_executable(${test_name} ${test_source})
@@ -98,6 +168,9 @@ if(HRN_BUILD_TESTS)
     if(test_name STREQUAL "hrn_section_visual_report_test" OR
        test_name STREQUAL "stage2_visual_report_acceptance_test")
       target_link_libraries(${test_name} PRIVATE hrn_visual_report)
+    endif()
+    if(test_name STREQUAL "hrn_interactive_case_test")
+      target_link_libraries(${test_name} PRIVATE hrn_interactive_case)
     endif()
     if(HRN_WARNINGS_AS_ERRORS)
       target_compile_options(${test_name} PRIVATE -Werror)

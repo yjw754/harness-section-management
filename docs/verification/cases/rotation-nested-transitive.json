@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "modelingTolerance": 1e-9,
+  "positionTransform": [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1],
+  "roots": {
+    "positive": {"shape": {"kind": "circular", "radius": 25}, "rotation": 0, "spacing": 0, "autoResize": false},
+    "negative": {"shape": {"kind": "circular", "radius": 25}, "rotation": 0, "spacing": 0, "autoResize": false}
+  },
+  "sections": [
+    {"id": "p-wrap", "label": "Positive container", "side": "positive", "parentId": null, "shape": {"kind": "circular", "radius": 10}, "rotation": 0, "spacing": 1, "autoResize": false},
+    {"id": "p-a", "label": "Positive mapped A", "side": "positive", "parentId": "p-wrap", "shape": {"kind": "circular", "radius": 3}, "rotation": 0, "spacing": 0, "autoResize": false},
+    {"id": "p-b", "label": "Positive mapped B", "side": "positive", "parentId": "p-wrap", "shape": {"kind": "circular", "radius": 2}, "rotation": 0, "spacing": 0, "autoResize": false},
+    {"id": "p-free", "label": "Positive free child", "side": "positive", "parentId": "p-wrap", "shape": {"kind": "circular", "radius": 2}, "rotation": 0, "spacing": 0, "autoResize": false},
+    {"id": "p-outer", "label": "Positive outer peer", "side": "positive", "parentId": null, "shape": {"kind": "circular", "radius": 4}, "rotation": 0, "spacing": 0, "autoResize": false},
+    {"id": "n-wrap", "label": "Negative container", "side": "negative", "parentId": null, "shape": {"kind": "circular", "radius": 10}, "rotation": 0, "spacing": 1, "autoResize": false},
+    {"id": "n-a", "label": "Negative mapped A", "side": "negative", "parentId": "n-wrap", "shape": {"kind": "circular", "radius": 3}, "rotation": 0, "spacing": 0, "autoResize": false},
+    {"id": "n-b", "label": "Negative mapped B", "side": "negative", "parentId": "n-wrap", "shape": {"kind": "circular", "radius": 1}, "rotation": 0, "spacing": 0, "autoResize": false},
+    {"id": "n-free", "label": "Negative free child", "side": "negative", "parentId": "n-wrap", "shape": {"kind": "circular", "radius": 2}, "rotation": 0, "spacing": 0, "autoResize": false},
+    {"id": "n-outer", "label": "Negative outer peer", "side": "negative", "parentId": null, "shape": {"kind": "circular", "radius": 4}, "rotation": 0, "spacing": 0, "autoResize": false}
+  ],
+  "relations": [
+    {"positiveId": "p-a", "negativeId": "n-a", "samePosition": true},
+    {"positiveId": "p-b", "negativeId": "n-a", "samePosition": true},
+    {"positiveId": "p-b", "negativeId": "n-b", "samePosition": true}
+  ]
+}

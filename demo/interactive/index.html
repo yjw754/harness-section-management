@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Stage 2 截面布局调试器</title>
+  <link rel="stylesheet" href="./@HRN_APP_CSS@">
+</head>
+<body>
+  <header class="page-header">
+    <div>
+      <p class="eyebrow">Stage 2 · 内部调试</p>
+      <h1>截面布局调试器</h1>
+      <p class="muted">直接编辑圆形截面、嵌套与映射，用 Stage 2 求解器预览两侧布局。</p>
+    </div>
+    <div class="toolbar">
+      <label class="file-control" title="从本地文件加载案例">导入 JSON
+        <input type="file" accept=".json,application/json" data-testid="case-import">
+      </label>
+      <button type="button" data-testid="case-export">导出 JSON</button>
+      <label class="check"><input type="checkbox" data-testid="auto-calculate" checked> 自动计算</label>
+      <button class="primary" type="button" data-testid="calculate" disabled>计算</button>
+      <output class="status" data-testid="status" data-state="loading" aria-live="polite">正在加载求解器</output>
+    </div>
+  </header>
+
+  <main class="workspace" inert>
+    <div class="column">
+      <section class="panel">
+        <h2>两侧 Root</h2>
+        <div class="root-fields">
+          <fieldset>
+            <legend>正侧 Root</legend>
+            <div class="root-parameters">
+              <label>半径 <input type="number" step="any" data-testid="root-positive-radius"></label>
+              <label>旋转角 (°) <input type="number" step="any" data-testid="root-positive-rotation"></label>
+              <label>间距 <input type="number" min="0" step="any" data-testid="root-positive-spacing"></label>
+              <label class="check"><input type="checkbox" data-testid="root-positive-auto-resize"> 自动调径</label>
+            </div>
+          </fieldset>
+          <fieldset>
+            <legend>负侧 Root</legend>
+            <div class="root-parameters">
+              <label>半径 <input type="number" step="any" data-testid="root-negative-radius"></label>
+              <label>旋转角 (°) <input type="number" step="any" data-testid="root-negative-rotation"></label>
+              <label>间距 <input type="number" min="0" step="any" data-testid="root-negative-spacing"></label>
+              <label class="check"><input type="checkbox" data-testid="root-negative-auto-resize"> 自动调径</label>
+            </div>
+          </fieldset>
+        </div>
+        <p class="hint">某侧有多个顶层截面时，Root 才参与排布。开启自动调径时，以求解后的半径绘图；0 或 1 个顶层截面时，Root 只作参考。</p>
+      </section>
+      <section class="panel">
+        <h2>成员截面</h2>
+        <p class="hint">点选节点即可编辑参数。修改任一侧的旋转角时，子截面按角度差转动，对侧有「同位置」关系的截面同步移动。</p>
+        <div class="section-trees">
+          <section class="section-side">
+            <div class="panel-heading">
+              <h3>正侧</h3>
+              <button type="button" data-testid="add-section-positive">+ 顶层截面</button>
+            </div>
+            <div data-testid="section-tree-positive"></div>
+          </section>
+          <section class="section-side">
+            <div class="panel-heading">
+              <h3>负侧</h3>
+              <button type="button" data-testid="add-section-negative">+ 顶层截面</button>
+            </div>
+            <div data-testid="section-tree-negative"></div>
+          </section>
+        </div>
+        <div class="section-properties" data-testid="section-properties"></div>
+      </section>
+      <section class="panel">
+        <div class="panel-heading">
+          <h2>跨侧映射</h2>
+          <button type="button" data-testid="add-relation">+ 映射</button>
+        </div>
+        <div class="table-scroll">
+          <table data-testid="relation-editor">
+            <thead><tr><th>正侧截面</th><th>负侧截面</th><th>关系</th><th>操作</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+    <div class="column" id="results">
+      <section class="panel" data-testid="diagnostics" aria-live="polite">
+        <h2>诊断</h2>
+        <ul></ul>
+      </section>
+      <section class="panel result-panel">
+        <div class="panel-heading">
+          <h2>两侧布局</h2>
+          <small class="hint" id="snapshot-note">尚未得到成功布局</small>
+        </div>
+        <div class="plots">
+          <section data-testid="layout-positive" data-stale="false">
+            <div class="plot-heading">
+              <h3>正侧</h3>
+              <div class="zoom">
+                <button type="button" data-zoom="in" aria-label="放大">＋</button>
+                <button type="button" data-zoom="out" aria-label="缩小">−</button>
+                <button type="button" data-zoom="fit">适应</button>
+              </div>
+            </div>
+            <svg aria-label="正侧圆形截面排布" viewBox="-1 -1 2 2"></svg>
+          </section>
+          <section data-testid="layout-negative" data-stale="false">
+            <div class="plot-heading">
+              <h3>负侧</h3>
+              <div class="zoom">
+                <button type="button" data-zoom="in" aria-label="放大">＋</button>
+                <button type="button" data-zoom="out" aria-label="缩小">−</button>
+                <button type="button" data-zoom="fit">适应</button>
+              </div>
+            </div>
+            <svg aria-label="负侧圆形截面排布" viewBox="-1 -1 2 2"></svg>
+          </section>
+        </div>
+        <p class="hint">虚线表示侧 Root。点击圆或草稿树中的截面查看详情。X →　Y ↑</p>
+      </section>
+      <section class="panel">
+        <h2>当前草稿</h2>
+        <div class="plots">
+          <div data-testid="tree-positive"></div>
+          <div data-testid="tree-negative"></div>
+        </div>
+        <h3>映射关系</h3>
+        <ul class="mapping-list" data-testid="draft-mappings"></ul>
+      </section>
+      <section class="panel" data-testid="selection-details">
+        <h2>截面详情</h2>
+        <div></div>
+      </section>
+    </div>
+  </main>
+  <script type="module" data-solver-module="./@HRN_SOLVER_JS@">
+    import {startDebugger} from './@HRN_APP_JS@';
+    try {
+      const moduleUrl = document.querySelector('[data-solver-module]').dataset.solverModule;
+      const {default: createSolver} = await import(moduleUrl);
+      await startDebugger(await createSolver());
+    } catch (error) {
+      const status = document.querySelector('[data-testid="status"]');
+      status.dataset.state = 'load-error';
+      status.textContent = '求解器加载失败';
+      const message = document.createElement('li');
+      message.textContent = `请使用本地 HTTP 打开完整的生成目录。${error.message}`;
+      document.querySelector('[data-testid="diagnostics"] ul').append(message);
+    }
+  </script>
+</body>
+</html>

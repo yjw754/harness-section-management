@@ -1,0 +1,165 @@
+{
+  "schemaVersion": 1,
+  "modelingTolerance": 1e-9,
+  "positionTransform": [
+    1,
+    0,
+    0,
+    0,
+    0,
+    1,
+    0,
+    0,
+    0,
+    0,
+    1,
+    0,
+    0,
+    0,
+    0,
+    1
+  ],
+  "roots": {
+    "positive": {
+      "shape": {
+        "kind": "circular",
+        "radius": 20
+      },
+      "rotation": 0,
+      "spacing": 0,
+      "autoResize": false
+    },
+    "negative": {
+      "shape": {
+        "kind": "circular",
+        "radius": 20
+      },
+      "rotation": 0,
+      "spacing": 0,
+      "autoResize": false
+    }
+  },
+  "sections": [
+    {
+      "id": "p-0",
+      "label": "p-0",
+      "side": "positive",
+      "parentId": "p-3",
+      "shape": {
+        "kind": "circular",
+        "radius": 3
+      },
+      "rotation": 0,
+      "spacing": 0,
+      "autoResize": false
+    },
+    {
+      "id": "n-0",
+      "label": "n-0",
+      "side": "negative",
+      "parentId": null,
+      "shape": {
+        "kind": "circular",
+        "radius": 3
+      },
+      "rotation": 0,
+      "spacing": 0,
+      "autoResize": false
+    },
+    {
+      "id": "p-1",
+      "label": "p-1",
+      "side": "positive",
+      "parentId": "p-3",
+      "shape": {
+        "kind": "circular",
+        "radius": 3
+      },
+      "rotation": 0,
+      "spacing": 0,
+      "autoResize": false
+    },
+    {
+      "id": "p-2",
+      "label": "p-2",
+      "side": "positive",
+      "parentId": null,
+      "shape": {
+        "kind": "circular",
+        "radius": 3
+      },
+      "rotation": 0,
+      "spacing": 0,
+      "autoResize": false
+    },
+    {
+      "id": "n-1",
+      "label": "n-1",
+      "side": "negative",
+      "parentId": "n-3",
+      "shape": {
+        "kind": "circular",
+        "radius": 3
+      },
+      "rotation": 0,
+      "spacing": 0,
+      "autoResize": false
+    },
+    {
+      "id": "n-2",
+      "label": "n-2",
+      "side": "negative",
+      "parentId": "n-3",
+      "shape": {
+        "kind": "circular",
+        "radius": 3
+      },
+      "rotation": 0,
+      "spacing": 0,
+      "autoResize": false
+    },
+    {
+      "id": "p-3",
+      "label": "p-3",
+      "side": "positive",
+      "parentId": null,
+      "shape": {
+        "kind": "circular",
+        "radius": 1
+      },
+      "rotation": 0,
+      "spacing": 0,
+      "autoResize": true
+    },
+    {
+      "id": "n-3",
+      "label": "n-3",
+      "side": "negative",
+      "parentId": null,
+      "shape": {
+        "kind": "circular",
+        "radius": 1
+      },
+      "rotation": 0,
+      "spacing": 0,
+      "autoResize": true
+    }
+  ],
+  "relations": [
+    {
+      "positiveId": "p-0",
+      "negativeId": "n-0",
+      "samePosition": true
+    },
+    {
+      "positiveId": "p-1",
+      "negativeId": "n-1",
+      "samePosition": true
+    },
+    {
+      "positiveId": "p-2",
+      "negativeId": "n-2",
+      "samePosition": true
+    }
+  ]
+}

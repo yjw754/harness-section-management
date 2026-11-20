@@ -1,0 +1,103 @@
+{
+  "schemaVersion": 1,
+  "modelingTolerance": 1e-9,
+  "positionTransform": [
+    1,
+    0,
+    0,
+    0,
+    0,
+    1,
+    0,
+    0,
+    0,
+    0,
+    1,
+    0,
+    0,
+    0,
+    0,
+    1
+  ],
+  "roots": {
+    "positive": {
+      "shape": {
+        "kind": "circular",
+        "radius": 20
+      },
+      "rotation": 45,
+      "spacing": 0,
+      "autoResize": false
+    },
+    "negative": {
+      "shape": {
+        "kind": "circular",
+        "radius": 20
+      },
+      "rotation": 45,
+      "spacing": 0,
+      "autoResize": false
+    }
+  },
+  "sections": [
+    {
+      "id": "p-main",
+      "label": "P main",
+      "side": "positive",
+      "parentId": null,
+      "shape": {
+        "kind": "circular",
+        "radius": 4
+      },
+      "rotation": 0,
+      "spacing": 0,
+      "autoResize": false
+    },
+    {
+      "id": "n-main",
+      "label": "N main",
+      "side": "negative",
+      "parentId": null,
+      "shape": {
+        "kind": "circular",
+        "radius": 4
+      },
+      "rotation": 0,
+      "spacing": 0,
+      "autoResize": false
+    },
+    {
+      "id": "n-1",
+      "label": "n-1",
+      "side": "negative",
+      "parentId": null,
+      "shape": {
+        "kind": "circular",
+        "radius": 4
+      },
+      "rotation": 0,
+      "spacing": 0,
+      "autoResize": false
+    },
+    {
+      "id": "p-1",
+      "label": "p-1",
+      "side": "positive",
+      "parentId": null,
+      "shape": {
+        "kind": "circular",
+        "radius": 4
+      },
+      "rotation": 0,
+      "spacing": 0,
+      "autoResize": false
+    }
+  ],
+  "relations": [
+    {
+      "positiveId": "p-main",
+      "negativeId": "n-main",
+      "samePosition": true
+    }
+  ]
+}

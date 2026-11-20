@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "modelingTolerance": 1e-9,
+  "positionTransform": [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1],
+  "roots": {
+    "positive": {"shape": {"kind": "circular", "radius": 2.16}, "rotation": 0, "spacing": 0, "autoResize": false},
+    "negative": {"shape": {"kind": "circular", "radius": 2.16}, "rotation": 0, "spacing": 0, "autoResize": false}
+  },
+  "sections": [
+    {"id": "p0", "label": "正侧 1", "side": "positive", "parentId": null, "shape": {"kind": "circular", "radius": 1}, "rotation": 0, "spacing": 0, "autoResize": false},
+    {"id": "p1", "label": "正侧 2", "side": "positive", "parentId": null, "shape": {"kind": "circular", "radius": 1}, "rotation": 0, "spacing": 0, "autoResize": false},
+    {"id": "p2", "label": "正侧 3", "side": "positive", "parentId": null, "shape": {"kind": "circular", "radius": 1}, "rotation": 0, "spacing": 0, "autoResize": false},
+    {"id": "n0", "label": "负侧单截面", "side": "negative", "parentId": null, "shape": {"kind": "circular", "radius": 1}, "rotation": 0, "spacing": 0, "autoResize": false}
+  ],
+  "relations": [{"positiveId": "p2", "negativeId": "n0", "samePosition": true}]
+}

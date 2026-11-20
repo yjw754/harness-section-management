@@ -35,12 +35,30 @@ HrnRuleLayoutResult HrnCircularRuleBasedLayoutSolver::solve(
     const HrnCircularLayoutRequest& request) const {
   HrnRuleLayoutResult result;
   if (!std::isfinite(request.spacing) || request.spacing < 0 ||
+      std::isnan(request.parent_radius_limit) || request.parent_radius_limit <= 0 ||
       !request.settings.valid() ||
       request.settings.algorithm_version != kAlgorithmVersion) {
     result.reason = HrnSectionFailureReason::InvalidInput;
     return result;
   }
   std::set<size_t> ids;
+  const HrnCircularGeometryService geometry;
+  for (const auto& fixed : request.fixed_placements) {
+    if (!std::isfinite(fixed.radius) || fixed.radius <= 0 ||
+        !std::isfinite(fixed.center.x) || !std::isfinite(fixed.center.y) ||
+        !ids.insert(fixed.id).second) {
+      result.reason = HrnSectionFailureReason::InvalidInput;
+      return result;
+    }
+    const double required = envelopeRadius(fixed, request.spacing);
+    if (!validCandidate(fixed.center, fixed.radius, result.placements, request.spacing, geometry) ||
+        !std::isfinite(required) || required > request.parent_radius_limit + kGeometryTolerance) {
+      result.reason = HrnSectionFailureReason::NoSolutionFound;
+      return result;
+    }
+    result.placements.push_back(fixed);
+    result.required_parent_radius = std::max(result.required_parent_radius, required);
+  }
   for (const auto& member : request.members) {
     if (!std::isfinite(member.radius) || member.radius <= 0 || !ids.insert(member.id).second) {
       result.reason = HrnSectionFailureReason::InvalidInput;
@@ -52,7 +70,6 @@ HrnRuleLayoutResult HrnCircularRuleBasedLayoutSolver::solve(
                                                      const HrnCircularLayoutMember& b) {
     return a.radius > b.radius;
   });
-  const HrnCircularGeometryService geometry;
   for (const auto& member : sorted) {
     if (result.iterations_used == request.settings.max_iterations) {
       result.reason = HrnSectionFailureReason::IterationBudgetExceeded;
@@ -62,6 +79,7 @@ HrnRuleLayoutResult HrnCircularRuleBasedLayoutSolver::solve(
     Point2D chosen{0, 0};
     bool found = false;
     double best_score = std::numeric_limits<double>::infinity();
+    double best_compact_score = std::numeric_limits<double>::infinity();
     const auto consider = [&](const Point2D& point) {
       ++result.candidate_count;
       if (!validCandidate(point, member.radius, result.placements, request.spacing, geometry))
@@ -69,16 +87,21 @@ HrnRuleLayoutResult HrnCircularRuleBasedLayoutSolver::solve(
       const double score = std::max(result.required_parent_radius,
           envelopeRadius(HrnCircularLayoutPlacement{member.id, member.radius, point},
                          request.spacing));
-      if (!std::isfinite(score)) return;
-      if (!found || better(score, best_score)) {
+      if (!std::isfinite(score) || score > request.parent_radius_limit + kGeometryTolerance) return;
+      const double compact_score = std::hypot(point.x, point.y);
+      const bool closer_on_tie = !request.fixed_placements.empty() &&
+          std::fabs(score - best_score) <= kGeometryTolerance &&
+          better(compact_score, best_compact_score);
+      if (!found || better(score, best_score) || closer_on_tie) {
         chosen = point;
         best_score = score;
+        best_compact_score = compact_score;
         found = true;
       }
     };
     if (result.placements.empty()) {
       consider({0, 0});
-    } else if (result.placements.size() == 1) {
+    } else if (result.placements.size() == 1 && request.fixed_placements.empty()) {
       const auto& first = result.placements.front();
       consider({first.center.x + first.radius + member.radius + request.spacing,
                 first.center.y});
@@ -115,6 +138,7 @@ HrnRuleLayoutResult HrnCircularRuleBasedLayoutSolver::solve(
           consider({previous.center.x + distance * direction.x,
                     previous.center.y + distance * direction.y});
       }
+      if (!request.fixed_placements.empty()) consider({0, 0});
     }
     if (!found) {
       result.reason = HrnSectionFailureReason::NoSolutionFound;

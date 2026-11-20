@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "modelingTolerance": 1e-9,
+  "positionTransform": [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1],
+  "roots": {
+    "positive": {"shape": {"kind": "circular", "radius": 12}, "rotation": 0, "spacing": 0.5, "autoResize": false},
+    "negative": {"shape": {"kind": "circular", "radius": 4}, "rotation": 15, "spacing": 0, "autoResize": false}
+  },
+  "sections": [
+    {"id": "p-shell", "label": "Positive container", "side": "positive", "parentId": null, "shape": {"kind": "circular", "radius": 5}, "rotation": 20, "spacing": 0.5, "autoResize": false},
+    {"id": "p-child", "label": "Positive child", "side": "positive", "parentId": "p-shell", "shape": {"kind": "circular", "radius": 2}, "rotation": 0, "spacing": 0, "autoResize": false},
+    {"id": "p-peer", "label": "Positive peer", "side": "positive", "parentId": null, "shape": {"kind": "circular", "radius": 3}, "rotation": 0, "spacing": 0, "autoResize": false}
+  ],
+  "relations": []
+}

@@ -19,7 +19,8 @@ std::unique_ptr<HrnSectionData> section(double radius, bool resize) {
   return HrnSectionData::create(HrnCircularSectionShape::create(radius, 1e-9),
       std::unique_ptr<HrnSectionLayout>(new HrnRuleBasedLayout()), options);
 }
-void independentlyCheckSide(const HrnCircularSolvedSide& side) {
+void independentlyCheckSide(const HrnCircularSolvedSide& side,
+                            const std::vector<std::pair<size_t, size_t>>& shared_pairs = {}) {
   HrnCircularGeometryService geometry;
   std::map<const HrnSegment*, size_t> index;
   for (size_t i = 0; i < side.segments.size(); ++i) index[side.segments[i]] = i;
@@ -40,6 +41,15 @@ void independentlyCheckSide(const HrnCircularSolvedSide& side) {
       ASSERT_TRUE(containment.valid);
       EXPECT_TRUE(containment.contained);
       for (size_t j = i + 1; j < members.size(); ++j) {
+        bool shared = false;
+        for (const auto& pair : shared_pairs)
+          shared = shared || (pair.first == members[i] && pair.second == members[j]) ||
+                             (pair.second == members[i] && pair.first == members[j]);
+        if (shared) {
+          EXPECT_NEAR(a.x, side.centers2d[members[j]].x, 1e-9);
+          EXPECT_NEAR(a.y, side.centers2d[members[j]].y, 1e-9);
+          continue;
+        }
         const auto& b = side.centers2d[members[j]];
         const double br = side.sections[members[j]]->shape().dimensions().primary;
         const auto distance = geometry.signedDistance({a, ar}, {b, br}, 1e-9);
@@ -112,7 +122,7 @@ TEST(Stage2Acceptance, HundredCirclesFiveLevelsBothSidesAndRepeatability) {
                 first.side(ZeHrnSide::Negative).iterations_used << std::endl;
 }
 
-TEST(Stage2Acceptance, FiveLevelMappedCaseRejectsIncompatibleSharedCenters) {
+TEST(Stage2Acceptance, FiveLevelMappedCaseAllowsMappedSiblingOverlap) {
   Matrix4D matrix;
   matrix.m[0][0] = 0; matrix.m[0][1] = -1;
   matrix.m[1][0] = 1; matrix.m[1][1] = 0;
@@ -137,15 +147,27 @@ TEST(Stage2Acceptance, FiveLevelMappedCaseRejectsIncompatibleSharedCenters) {
     builder.circularSection(ZeHrnSide::Positive, label, member);
   for (const char* label : {"N1", "N2", "N3"})
     builder.circularSection(ZeHrnSide::Negative, label, member);
-  builder.relate("P1", "N1", true).relate("P3", "N3", true);
+  // Two negative siblings intentionally share one center through P1.
+  builder.relate("P1", "N1", true).relate("P1", "N3", true);
   auto case_data = builder.build();
   ASSERT_TRUE(case_data.succeeded);
   HrnPositionPointSolver solver;
   HrnSectionTransactionResult status;
   auto point = HrnPositionPoint::createSolved(*case_data.input,
       case_data.relations, solver, status);
-  EXPECT_FALSE(point);
-  EXPECT_EQ(status.primary_reason, HrnSectionFailureReason::SamePositionConstraintConflict);
-  ASSERT_FALSE(status.diagnostics.empty());
-  ASSERT_FALSE(status.diagnostics.front().conflicts.empty());
+  ASSERT_TRUE(point) << static_cast<int>(status.primary_reason);
+  EXPECT_TRUE(status.committed);
+  EXPECT_TRUE(status.diagnostics.empty());
+  const auto solved = solver.solveCircular(*case_data.input, case_data.relations);
+  ASSERT_TRUE(solved.status.committed);
+  independentlyCheckSide(solved.sides[0]);
+  independentlyCheckSide(solved.sides[1], {{0, 2}});
+  for (size_t negative : {0u, 2u}) {
+    EXPECT_NEAR(solved.sides[0].centers2d[0].x, solved.sides[1].centers2d[negative].x, 1e-9);
+    EXPECT_NEAR(solved.sides[0].centers2d[0].y, solved.sides[1].centers2d[negative].y, 1e-9);
+    EXPECT_NEAR(point->locationAt(ZeHrnSide::Positive, 0).x,
+                point->locationAt(ZeHrnSide::Negative, negative).x, 1e-9);
+    EXPECT_NEAR(point->locationAt(ZeHrnSide::Positive, 0).y,
+                point->locationAt(ZeHrnSide::Negative, negative).y, 1e-9);
+  }
 }

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <vector>
+#include <limits>
 
 #include "hrn/section/HrnSectionDiagnostics.h"
 #include "hrn/section/HrnSectionLayout.h"
@@ -10,15 +11,17 @@ struct HrnCircularLayoutMember {
   size_t id;
   double radius;
 };
-struct HrnCircularLayoutRequest {
-  std::vector<HrnCircularLayoutMember> members;
-  double spacing = 0;
-  HrnLayoutSolveSettings settings;
-};
 struct HrnCircularLayoutPlacement {
   size_t id;
   double radius;
   Point2D center;
+};
+struct HrnCircularLayoutRequest {
+  std::vector<HrnCircularLayoutMember> members;
+  double spacing = 0;
+  HrnLayoutSolveSettings settings;
+  std::vector<HrnCircularLayoutPlacement> fixed_placements;
+  double parent_radius_limit = std::numeric_limits<double>::infinity();
 };
 struct HrnRuleLayoutResult {
   bool succeeded = false;
